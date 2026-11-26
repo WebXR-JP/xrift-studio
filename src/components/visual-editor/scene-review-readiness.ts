@@ -26,6 +26,20 @@ export function sceneReviewReadiness(scene: Scene): { ready: boolean; error?: st
   return { ready };
 }
 
+/**
+ * Something the Scene draws is still on its way: a Model, or a texture a
+ * Material or the Skybox waits for. A load that failed is not waited for,
+ * because the frame the author sees will not change either.
+ */
+export function sceneLoadPending(scene: Scene): boolean {
+  for (const state of resources.get(scene)?.values() ?? []) {
+    if (state.status === "loading") return true;
+  }
+  let loading = false;
+  scene.traverse(object => { if (object.userData.xriftModelLoadState === "loading") loading = true; });
+  return loading;
+}
+
 /** A changed identity starts pending before capture's next animation frame.
  * Updates belonging to an old asset/hash cannot complete the new registration. */
 export function useSceneReviewResource(key: string, initial: SceneReviewLoadState) {

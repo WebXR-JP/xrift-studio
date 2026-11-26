@@ -555,6 +555,10 @@ SceneDocumentを書き換えない。現在表示中のSceneの読取、camera�
   カメラの奥を返す。WebMの録画もstart / stopで扱う
 - `save_scene`は通常のEditor自動保存をflushし、同じSceneが保存された場合だけfingerprintを返す。保存中にSceneが変われば再保存を求める。
 - `capture_scene_view`は描画したPNGを1枚、appの`debug-captures`へ保存し、パスを返す。数値やdocumentの確認に加え、この画像で実際の表示を確認する。
+  既定では、作者が見ているScene Viewをそのまま返す。グリッド、ギズモ、選択とColliderの枠、ライト・音・スポーンの目印も写る。
+  参考画像とワールドそのものを見比べるときは`showEditorHelpers: false`を渡す。その1枚だけ、編集用の表示を除き、表示モードをSceneにして描画する。サムネイルと録画用の表示と同じ描き方で、撮影後のScene Viewは元の表示へ戻る。
+  選択と、`editor.gizmo.gridVisible`などの保存済みの設定は変わらない。撮影のためにこれらを書き換えない。ギズモを操作している間は撮影を待ち、操作が続いた場合はエラーを返す。booleanでない値は`INVALID_ARGUMENT`で拒否する。
+  `capture_scene_debug`の録画は、画面の表示をそのまま記録する。編集用の表示を除いた動画は、`set_recording_viewport`の`showEditorHelpers: false`と`start_recording`で撮る。
 - `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
   `back` `left` `right`) / 既定の斜め (`iso`) を選べる。`focusEntityId`でオブジェクトの
   実描画boundsへ寄る。あるいは`position`と`target`を直接指定する。プリセット

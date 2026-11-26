@@ -126,6 +126,7 @@ import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/vis
 import { runEditorDragDataFixture } from "../src/components/visual-editor/editor-drag-data.fixture.ts";
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
 import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
+import { runSceneViewCaptureFixtureAssertions } from "../src/components/visual-editor/scene-view-capture.fixture.ts";
 import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
 import { runVramEstimateFixtureAssertions } from "../src/lib/visual-editor/vram-estimate.fixture.ts";
 import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-editor/world-play-spawn.fixture.ts";
@@ -449,6 +450,7 @@ try {
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
+    ["Scene View capture without editing helpers", runSceneViewCaptureFixtureAssertions],
     ["scene VRAM estimate", runSceneVramEstimateFixtureAssertions],
     ["world play spawn", runWorldPlaySpawnFixtureAssertions],
     ["script execution scope", runScriptExecutionScopeFixtureAssertions],

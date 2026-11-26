@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import { captureModelReviewView, captureWorldReviewView, modelReviewTarget, renderReviewFrame, worldReviewReady, type ModelReviewView, type WorldReviewView } from "./model-review-capture";
-import { sceneReviewReadiness } from "./scene-review-readiness";
+import { sceneLoadPending, sceneReviewReadiness } from "./scene-review-readiness";
 
 export type SceneScreenshotRequest = {
   /**
@@ -12,6 +12,13 @@ export type SceneScreenshotRequest = {
   /** Capture a loaded Model from a temporary camera, leaving the Edit camera intact. */
   modelView?: ModelReviewView;
   worldView?: WorldReviewView;
+  /**
+   * `false` asks for the frame thumbnails and the recording view draw: no grid,
+   * gizmo, selection outline or helper markers, in the Scene display mode. The
+   * Scene View holds that state only while this request is pending. Omitted,
+   * the frame is whatever the Scene View shows.
+   */
+  showEditorHelpers?: boolean;
   /** Receives the captured PNG as a data URL. */
   onCapture: (dataUrl: string) => void;
   /** Called instead of `onCapture` when the frame could not be read. */
@@ -20,6 +27,8 @@ export type SceneScreenshotRequest = {
 
 type Props = {
   request: SceneScreenshotRequest | null;
+  /** Whether the Scene View is drawing without its editing helpers right now. */
+  helpersHidden?: boolean;
   /** Fires after success or failure so the parent can clear its request. */
   onComplete?: () => void;
 };
@@ -38,7 +47,7 @@ type Props = {
  * rather than in props, so one viewport can serve callers that each want the
  * image for a different purpose.
  */
-export function SceneScreenshotCapture({ request, onComplete }: Props) {
+export function SceneScreenshotCapture({ request, helpersHidden = false, onComplete }: Props) {
   const { camera, gl, invalidate, scene } = useThree();
   const capturedIdRef = useRef(0);
 
@@ -51,6 +60,11 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
   completeRef.current = onComplete;
 
   const requestId = request?.id ?? 0;
+  // A frame without helpers starts over when the Scene View drops them, so the
+  // two hops below count from that commit, as the thumbnail capture's do. The
+  // Scene View puts it off while the author drags a gizmo.
+  const helperFree = request?.showEditorHelpers === false;
+  const helpersShown = helperFree && !helpersHidden;
 
   useEffect(() => {
     if (requestId <= 0 || capturedIdRef.current === requestId) return;
@@ -70,10 +84,14 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
         const readiness = sceneReviewReadiness(scene);
         const target = current?.modelView ? modelReviewTarget(scene, current.modelView) : null;
         const waiting = current?.modelView && !target || current?.worldView && !worldReviewReady(scene);
-        if (waiting && !readiness.error && performance.now() - startedAt < 12_000) { schedule(); return; }
+        // The Scene display mode may have mounted lights, a Skybox or
+        // Materials that another display mode left out; wait for what they load.
+        const settling = helpersShown || helperFree && sceneLoadPending(scene);
+        if ((waiting && !readiness.error || settling) && performance.now() - startedAt < 12_000) { schedule(); return; }
         // Marked before the read so a failure cannot retry in a loop.
         capturedIdRef.current = requestId;
         try {
+          if (helpersShown) throw new Error("ギズモの操作が続いているため、編集用の表示を除いた画像を撮影できませんでした。操作を終えてから撮り直してください");
           if (current?.modelView || current?.worldView) {
             if (readiness.error) throw new Error(readiness.error);
           }
@@ -111,7 +129,7 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
     };
-  }, [camera, gl, invalidate, requestId, scene]);
+  }, [camera, gl, helperFree, helpersShown, invalidate, requestId, scene]);
 
   return null;
 }
