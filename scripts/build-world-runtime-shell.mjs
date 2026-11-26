@@ -26,6 +26,10 @@
  * 2. `vite-plugin-dts` is dropped. It fails to load under pnpm's strict
  *    resolution (`@rollup/pluginutils` has no `createFilter` export for it),
  *    and an uploaded world has no use for `.d.ts` files anyway.
+ *
+ * The template's `vite.config.ts` has handed `defineConfig` an object and,
+ * since it reads the build mode, a function that returns one. Both forms are
+ * patched; the second was built on 2026-11-26.
  */
 
 import { spawn } from "node:child_process";

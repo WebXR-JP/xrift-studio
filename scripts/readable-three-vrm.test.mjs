@@ -63,6 +63,38 @@ export default defineConfig({ build: { target: 'esnext', minify: false },
   }
 });
 
+test("browser shell aliases the VRM import when the template config is a function of the build mode", () => {
+  const alias = " '@pixiv/three-vrm': path.resolve(__dirname, './src/xrift-studio/three-vrm-readable.js'),";
+  const header = "import path from 'path';\nimport { defineConfig } from 'vite';\n";
+  const config = `{
+  plugins: [react(), mode === 'https' ? basicSsl() : null, federation({ shared: ['react', 'three'] })],
+  build: { target: 'esnext', minify: false },
+  resolve: { alias: { '~': path.resolve(__dirname, './src') } },
+}`;
+  // The official template returns the object from an arrow function; the other
+  // two spellings do the same thing and nothing else.
+  for (const source of [
+    `${header}export default defineConfig(({ mode }) => (${config}));\n`,
+    `${header}export default defineConfig(({ mode }) => {\n  return ${config};\n});\n`,
+    `${header}export default defineConfig(function ({ mode }) {\n  return (${config});\n});\n`,
+  ]) {
+    const patched = withReadableVrmAlias(source);
+    assert.equal(patched.replace(alias, ""), source);
+    assert.ok(patched.includes(`alias: {${alias} '~'`));
+    assert.throws(() => withReadableVrmAlias(patched));
+  }
+  // A config built across statements, or by another call, may set the alias
+  // where the patch cannot see it.
+  for (const unsupported of [
+    `${header}export default defineConfig(({ mode }) => {\n  const config = ${config};\n  return config;\n});\n`,
+    `${header}export default defineConfig(({ mode }) => mergeConfig(base, ${config}));\n`,
+    `${header}export default defineConfig(({ mode }) => {\n  if (mode === 'https') return ${config};\n  return ${config};\n});\n`,
+    `${header}export default defineConfig(createConfig);\n`,
+  ]) {
+    assert.throws(() => withReadableVrmAlias(unsupported));
+  }
+});
+
 test("committed readable source and license reproduce the installed pinned package", async () => {
   const result = await prepareReadableThreeVrm(true);
   assert.equal(result.version, "3.5.5");
