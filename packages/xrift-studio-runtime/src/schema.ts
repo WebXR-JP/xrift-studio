@@ -1,3 +1,4 @@
+import type { XriftClassicShader } from "./classic-shader-contract.js";
 import { isXriftExtrudeProfile } from "./extrude-profile.js";
 
 export const XRIFT_STUDIO_RUNTIME_FORMAT = "xrift-studio.runtime" as const;
@@ -379,31 +380,8 @@ export type XriftRuntimeAsset =
               { sourceAttribute?: string; defaultValue?: number[] }
             >;
           }
-        | {
-            kind: "classic-r3f";
-            sourceModulePath: string;
-            vertexShader: string;
-            fragmentShader: string;
-            uniforms: Record<
-              string,
-              | { kind: "texture"; textureAssetId: string; colorSpace?: "srgb" | "linear"; generateMipmaps?: boolean; filter?: "nearest" | "linear"; wrapS?: "repeat" | "clamp-to-edge"; wrapT?: "repeat" | "clamp-to-edge" }
-              | { kind: "number"; value: number }
-              | { kind: "color"; value: string }
-              | { kind: "vector"; value: number[] }
-            >;
-            variants: Array<{
-              name: string;
-              meshNameIncludes?: string;
-              defines: Record<string, string>;
-              side: "front" | "back" | "double";
-              transparent: boolean;
-              depthWrite: boolean;
-            }>;
-            animatedTimeUniform?: string;
-            sourceModelAssetId?: string;
-            vertexShaderAssetId?: string;
-            fragmentShaderAssetId?: string;
-          };
+        // The descriptor the editor document stores, passed through unchanged.
+        | XriftClassicShader;
     }
   | {
       id: string;

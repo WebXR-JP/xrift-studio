@@ -232,3 +232,49 @@ export function stampObjectTimeUniforms(
   });
   return stamped;
 }
+
+/**
+ * Advances every time uniform recorded on one live material.
+ *
+ * This is the clock: the editor's Scene View, the previews, the generated
+ * world and the Runtime JSON adapter all call it once per frame with the same
+ * elapsed seconds, so a shader cannot run on one path and stand still on
+ * another.
+ */
+export function advanceMaterialTimeUniforms(
+  material: TimeUniformMaterial | null | undefined,
+  elapsedSeconds: number,
+): void {
+  const specs = material?.userData?.xriftTimeUniforms;
+  const uniforms = material?.uniforms;
+  if (!Array.isArray(specs) || !uniforms) return;
+  for (const spec of specs as TimeUniformSpec[]) {
+    const uniform = uniforms[spec.name];
+    if (uniform) {
+      applyTimeUniformValue(
+        uniform as MutableUniformValue,
+        spec,
+        elapsedSeconds,
+      );
+    }
+  }
+}
+
+/**
+ * Advances the time uniforms of every material under an object tree,
+ * including each slot of a multi-material mesh.
+ */
+export function advanceObjectTimeUniforms(
+  root: TimeUniformObject | null | undefined,
+  elapsedSeconds: number,
+): void {
+  if (!root) return;
+  root.traverse((object) => {
+    const mesh = object as { material?: unknown };
+    if (!mesh.material) return;
+    const entries = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const entry of entries) {
+      advanceMaterialTimeUniforms(entry as TimeUniformMaterial, elapsedSeconds);
+    }
+  });
+}

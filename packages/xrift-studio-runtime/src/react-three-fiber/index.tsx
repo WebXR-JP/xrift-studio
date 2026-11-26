@@ -94,11 +94,7 @@ import {
   XriftThreeLoader,
   type XriftLoadResult,
 } from "../three/index.js";
-import {
-  type MutableUniformValue,
-  type TimeUniformSpec,
-  applyTimeUniformValue,
-} from "../shader-time.js";
+import { advanceObjectTimeUniforms } from "../shader-time.js";
 import { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
   XriftScriptParticleEmitter,
@@ -2130,21 +2126,7 @@ function numberOr(value: unknown, fallback: number, minimum: number): number {
 function XriftRuntimeTimeUniforms({ result }: { result: XriftLoadResult }) {
   useFrame((state, delta) => {
     updateMToonMaterials(result.root, delta);
-    const elapsed = state.clock.getElapsedTime();
-    result.root.traverse((object) => {
-      const mesh = object as Mesh;
-      const material = mesh.material as ShaderMaterial | undefined;
-      const specs = material?.userData?.xriftTimeUniforms as
-        | TimeUniformSpec[]
-        | undefined;
-      if (!Array.isArray(specs) || !material) return;
-      for (const spec of specs) {
-        const uniform = material.uniforms[spec.name];
-        if (uniform) {
-          applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
-        }
-      }
-    });
+    advanceObjectTimeUniforms(result.root, state.clock.getElapsedTime());
   });
   return null;
 }
