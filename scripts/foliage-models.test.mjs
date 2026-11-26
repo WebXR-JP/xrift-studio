@@ -191,10 +191,12 @@ test("sine, cosine and power are the nearest double, whatever the engine's own f
   assert.equal(sin(-2.5), -0.5984721441039565);
   assert.equal(cos(-2.5), -0.8011436155469337);
   assert.equal(sin(44), 0.017701925105413577);
-  assert.equal(sin(1e22), -0.8522008497671888);
-  assert.equal(cos(1e22), 0.523214785395139);
+  assert.equal(sin(1e15), 0.8582727931702359);
+  assert.equal(cos(1e15), -0.5131937377869703);
   assert.equal(sin(Math.PI), 1.2246467991473532e-16);
-  assert.equal(sin(0), 0);
+  assert.equal(sin(3e-9), 3e-9);
+  assert.equal(cos(3e-9), 1);
+  assert.ok(Object.is(sin(0), 0) && Object.is(sin(-0), -0));
   assert.equal(cos(0), 1);
   assert.equal(pow(0.007, 2.4), 6.733413665178239e-6);
   assert.equal(pow(10, -2.4), 0.003981071705534973);
@@ -206,8 +208,14 @@ test("sine, cosine and power are the nearest double, whatever the engine's own f
   // A branch tip keeps its radius through the pipe model, so chains of equal
   // thickness stay equal.
   assert.equal(pow(pow(0.007, 2.4), 1 / 2.4), 0.007);
-  assert.throws(() => pow(0, 2.4), RangeError);
-  assert.throws(() => sin(Number.NaN), RangeError);
+  // Outside the magnitudes the fixed point covers they refuse instead of
+  // returning a value with too few correct digits.
+  for (const outside of [() => sin(1e30), () => cos(1e-30), () => sin(Number.NaN), () => cos(Infinity)]) {
+    assert.throws(outside, RangeError);
+  }
+  for (const outside of [() => pow(0, 2.4), () => pow(-1, 2), () => pow(1e-30, 2), () => pow(0.001, 30)]) {
+    assert.throws(outside, RangeError);
+  }
 });
 
 for (const { fileName, bytes, report } of built) {

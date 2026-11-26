@@ -243,8 +243,8 @@ export const FOLIAGE_MODELS = [
 // come from whichever maths library the runtime was built with, and those
 // disagree in the last bit. One bit is enough to swap two branches of nearly
 // equal thickness, after which the tree grows differently. So these three are
-// computed here with fixed-point integers and rounded to a double once: the
-// result is the nearest double to the true value on every machine.
+// computed here with fixed-point integers and rounded to a double once, which
+// gives the nearest double to the true value and the same bits everywhere.
 // ---------------------------------------------------------------------------
 
 /** A Lehmer generator: the same seed gives the same sequence of values in 0..1. */
@@ -260,11 +260,20 @@ function seeded(seed) {
 const FIXED_BITS = 192n;
 const FIXED_ONE = 1n << FIXED_BITS;
 const FIXED_SCALE = Number(FIXED_ONE);
+/**
+ * Magnitudes from 2^-64 to 2^64 keep at least 128 of the 192 bits. A tree
+ * needs far less: angles of a few turns and radii from millimetres to metres.
+ */
+const FIXED_LARGEST = 18446744073709551616;
+const FIXED_SMALLEST = 1 / FIXED_LARGEST;
 const doubleBits = new DataView(new ArrayBuffer(8));
 
 /** The double as an integer count of 2^-192. */
 function fixedOf(value) {
-  if (!Number.isFinite(value)) throw new RangeError(`Not a finite number: ${value}`);
+  const size = Math.abs(value);
+  if (size !== 0 && !(size >= FIXED_SMALLEST && size <= FIXED_LARGEST)) {
+    throw new RangeError(`Outside the range of the fixed-point functions: ${value}`);
+  }
   doubleBits.setFloat64(0, value);
   const bits = doubleBits.getBigUint64(0);
   const exponent = Number((bits >> 52n) & 0x7ffn);
@@ -319,6 +328,7 @@ function quarterTurns(angle) {
 }
 
 export function sin(angle) {
+  if (angle === 0) return angle;
   const [quarter, rest] = quarterTurns(angle);
   const series = fixedSeries(rest, quarter % 2 === 0);
   const value = quarter < 2 ? series : -series;
@@ -367,7 +377,11 @@ function fixedExp(fixed) {
 /** base ** exponent for a positive base. */
 export function pow(base, exponent) {
   if (!(base > 0)) throw new RangeError(`pow needs a positive base: ${base}`);
-  return doubleOf(fixedExp(fixedMultiply(fixedOf(exponent), fixedLn(fixedOf(base)))));
+  const result = fixedExp(fixedMultiply(fixedOf(exponent), fixedLn(fixedOf(base))));
+  if (result < FIXED_ONE >> 64n) {
+    throw new RangeError(`Outside the range of the fixed-point functions: ${base} ** ${exponent}`);
+  }
+  return doubleOf(result);
 }
 
 // ---------------------------------------------------------------------------
