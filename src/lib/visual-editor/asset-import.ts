@@ -21,6 +21,7 @@ import {
   removeNativeMToonOutlines,
   updateMToonMaterials,
 } from "../../../packages/xrift-studio-runtime/src/mtoon-runtime";
+import { registerGltfInstanceAttributes } from "../../../packages/xrift-studio-runtime/src/gltf-instance-attributes";
 import {
   GLTFLoader,
   type GLTF,
@@ -1969,6 +1970,8 @@ function parseWithGltfLoader(
   const loader = new GLTFLoader();
   const draco = new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco"));
   loader.setDRACOLoader(draco);
+  // The first thumbnail draws this object, so it is loaded as the Scene loads it.
+  registerGltfInstanceAttributes(loader);
   if (format === "vrm") {
     loader.register((parser) => {
       const plugin = new VRMLoaderPlugin(parser);

@@ -16,9 +16,9 @@ async function main() {
     await server.close();
   }
 const entries = catalog.WATER_SHADER_CATALOG;
-assert.equal(entries.length, 21);
+assert.equal(entries.length, 24);
 assert.equal(new Set(entries.map(e => e.id)).size, entries.length);
-assert.equal(new Set(entries.map(e => e.category)).size, 8);
+assert.equal(new Set(entries.map(e => e.category)).size, 9);
 let controls = 0;
 for (const entry of entries) {
   assert(entry.features.length >= 2);
@@ -67,7 +67,7 @@ for (const id of ['calm-lake', 'ocean-waves', 'stylized-toon']) assert(catalog.g
 assert.equal(catalog.getWaterShaderCatalogEntry('missing'), undefined);
 const programs = new Set(entries.map(e => JSON.stringify(e.shader.variants[0].defines))).size;
 assert(programs >= 12, 'Catalog became colour-only variations');
-const report = { status: 'passed', presets: entries.length, categories: 8, featurePrograms: programs,
+const report = { status: 'passed', presets: entries.length, categories: 9, featurePrograms: programs,
   parameterBindings: controls, checks: ['stable IDs', 'schema/ranges', 'parameter sanitizing', 'no catalog mutation',
     'wind/time declaration', 'safe Plane defaults', 'shader feature bindings', 'fog chunks'],
   scope: 'Catalog/TypeScript syntax only. Run browser GLSL and full application checks separately.' };

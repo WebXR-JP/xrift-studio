@@ -77,6 +77,26 @@ companionは`createAssetImportPlan`の`companionFiles`へ渡す。`three-model-c
 
 `model-companion-batch.fixture.ts`はglTF付属ファイルのグループ化、未参照ファイルの単独維持、MTL経由のtexture解決、単一ファイルbatchの非変更、MTL option flagの除去をファイルシステムなしで検証する。
 
+## インスタンスごとの属性
+
+`EXT_mesh_gpu_instancing`を使うノードは、three.jsのGLTFLoaderが`InstancedMesh`として読み込む。位置・回転・大きさはインスタンスの行列になり、`_COLOR_0`は`instanceColor`になる。それ以外の独自属性（`_AOFFSET`のように`_`で始まるもの）は、GLTFLoaderが頂点ごとの属性としてgeometryへ置くため、シェーダーには先頭の数インスタンス分の値が頂点の値として届く。
+
+`packages/xrift-studio-runtime/src/gltf-instance-attributes.ts`は、この独自属性を`InstancedBufferAttribute`として渡す。シェーダーはインスタンスごとに1つの値を読める。
+
+- 元データのGLBは書き換えない。読み込むたびに、メモリー上のgeometryだけを作る。
+- 対象は、glTFのJSONでノードが宣言した属性だけである。インスタンス数と頂点数の比較では判定しない。両方の数が同じモデルでも正しく扱い、拡張を使わないモデルには何もしない。
+- 属性はglTFの名前（`_AOFFSET`）と小文字の名前（`_aoffset`）の両方で読める。three.jsは頂点ごとの独自属性を小文字にするので、どちらの属性も同じ規則でシェーダーから読める。小文字の名前を頂点属性が使っている場合は、頂点属性を残す。
+- 複数のノードが同じメッシュを使う場合は、インスタンスのMeshごとにgeometryを分け、各ノードの値を持たせる。頂点とインデックスのバッファーは共有する。インスタンスでないMeshのgeometryは変更しない。
+- インスタンス数より短いアクセサーは変換せず、コンソールへ警告を出す。
+
+Scene View、Play、Assetのプレビューとサムネイル、Runtimeのローダー、公開用に生成したワールドは、同じ処理をGLTFLoaderへ登録する。生成したワールドは`StableModelClone`でモデルを複製する。`StableModelClone`は`InstancedMesh`の個数、行列、`instanceColor`を保つ。
+
+`gltf-instance-attributes.fixture.ts`は、属性の型・個数・値、メッシュを共有するノード、通常のモデルを変更しないことを検証する。`e2e/instance-attributes.spec.ts`は、編集、Play、生成したワールド、Runtimeのローダーの描画結果が一致することを確認する。
+
+依存ファイルと一緒に取り込む`.gltf`は、上記のとおりGLBへ変換する。この変換は独自のインスタンス属性を頂点属性として書き出すため、インスタンスごとの値は保持できない。値を保つには、必要なデータを含むGLBを取り込む。
+
+ブラウザ版の公開に使うビルド済みシェル（`public/xrift-runtime-shell/`）は、`node scripts/build-world-runtime-shell.mjs`で再生成した時点のRuntimeで動く。Runtimeのローダーを変更したら、シェルを再生成するまで公開先には反映されない。
+
 ## UI境界
 
 モデルの設定では、最後に正常に読み込めた構造情報、現在のimport recipe、既定マテリアル枠のbindingを分けて表示する。現在のproject-relative元データは同じ素材IDのまま再取り込みできる。進捗と成功・失敗の結果は同じ設定パネルに表示する。処理中に対象素材が編集された場合は、結果を自動適用せず直前の素材を保持する。

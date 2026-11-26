@@ -14,6 +14,7 @@ import {
   applyWaterShaderParameters,
   defaultWaterShaderParameterValues,
   getWaterShaderCatalogEntry,
+  isFlowingWaterShader,
 } from "./water-shader-catalog";
 import {
   WIND_DRIVEN_UNIFORMS,
@@ -27,9 +28,11 @@ import {
  */
 export function runWaterShaderFixtureAssertions(): void {
   assertCatalogIntegrity();
+  assertFlowingPresets();
   assertParameterEditing();
   assertCatalogInstall();
   assertCompiledWorld();
+  assertCompiledRiver();
 }
 
 function emptyManifest(): AssetManifest {
@@ -174,6 +177,68 @@ function assertCatalogIntegrity(): void {
       getWaterShaderCatalogEntry("nope") === undefined,
     "getWaterShaderCatalogEntry did not resolve presets correctly",
   );
+}
+
+/**
+ * Rivers are the one place on this shelf where something moves without the
+ * wind. Everything above still holds for them — they ride the wind contract
+ * for what the wind adds — and these rules pin down the part that is theirs.
+ */
+function assertFlowingPresets(): void {
+  const rivers = WATER_SHADER_CATALOG.filter((entry) => isFlowingWaterShader(entry.shader));
+  assert(rivers.length >= 1, "The Water catalog lost its flowing presets");
+  for (const entry of WATER_SHADER_CATALOG) {
+    const flows = isFlowingWaterShader(entry.shader);
+    // A current on a sea preset would keep it moving after the author stilled
+    // the wind, which is the rule every non-river preset is sold on.
+    assert(
+      flows === (entry.shader.uniforms.uFlowSpeed !== undefined) &&
+        flows === (entry.category === "river"),
+      `Water「${entry.id}」mixes a current with a wind-only surface`,
+    );
+    if (!flows) continue;
+    for (const uniform of ["uFlowSpeed", "uFlowAngle", "uRapids", "uChannelWidth", "uChannelDepth", "uBankSoftness", "uClarity"]) {
+      assert(
+        entry.parameters.some((parameter) => parameter.uniform === uniform),
+        `River「${entry.id}」does not expose ${uniform}`,
+      );
+    }
+    const speed = entry.shader.uniforms.uFlowSpeed;
+    assert(
+      speed?.kind === "number" && speed.value > 0,
+      `River「${entry.id}」ships standing still`,
+    );
+    // The current advances with time and its own speed alone. Reading the wind
+    // here would stop a river in still air; scaling by anything that itself
+    // varies with time would make it run faster the longer a world stays open.
+    const travelLine = entry.shader.fragmentShader
+      .split("\n")
+      .find((line) => line.includes("float flowTravel ="));
+    assert(
+      travelLine !== undefined &&
+        travelLine.includes("uTime * max(uFlowSpeed, 0.0)") &&
+        !/uWind|\bgust\b|\bsin\s*\(|\bcos\s*\(/i.test(travelLine),
+      `River「${entry.id}」does not advance its current linearly on its own speed: ${travelLine?.trim()}`,
+    );
+    // The frame comes from the mesh, so one Material serves every stretch and
+    // the Entity's Transform turns the flow.
+    assert(
+      entry.shader.vertexShader.includes("vFlowFrame") &&
+        entry.shader.fragmentShader.includes("vFlowFrame"),
+      `River「${entry.id}」does not take its direction from the mesh`,
+    );
+    // The author is told, on the card and through MCP, that this one keeps
+    // moving when the wind stops and that it runs straight.
+    assert(
+      entry.notes.includes("風が止まっていても") && entry.notes.includes("直線"),
+      `River「${entry.id}」does not say how it differs from the wind-driven presets`,
+    );
+    const speedHint = entry.parameters.find((parameter) => parameter.uniform === "uWaveSpeed")?.hint ?? "";
+    assert(
+      !speedHint.includes("泡や演出も含めて停止"),
+      `River「${entry.id}」still promises that the wave speed stops everything`,
+    );
+  }
 }
 
 function assertParameterEditing(): void {
@@ -327,6 +392,55 @@ function assertCompiledWorld(): void {
   assert(
     wind.speed === 1.75 && Math.abs(wind.direction[0] - 1) < 1e-9,
     "The fixture's own wind expectation drifted from the contract",
+  );
+}
+
+/**
+ * A river in the published World: still air stops the wind's share and leaves
+ * the current running, on the same GLSL and the same values the editor draws.
+ */
+function assertCompiledRiver(): void {
+  const entry = WATER_SHADER_CATALOG.find((candidate) => isFlowingWaterShader(candidate.shader));
+  if (!entry) throw new Error("No flowing Water preset to compile");
+  const prototype = createPrototypeProject("world", "river-compile");
+  const installed = applyWaterShaderCatalogInstall(prototype.assets, entry, { uFlowSpeed: 0.85 });
+  const placed = addBuiltinPrimitiveEntity(
+    prototype.scene,
+    installed.manifest,
+    BUILTIN_PRIMITIVE_CREATION_IDS.plane,
+    installed.primaryAssetId,
+  );
+  assert(placed !== null, "River fixture could not place a plane");
+  if (!placed) return;
+  const settings = resolveSceneSettings(placed.scene.settings);
+  const scene = {
+    ...placed.scene,
+    settings: { ...settings, vegetation: { ...settings.vegetation, enabled: false } },
+  };
+  const compiled = compileVisualProject(
+    {
+      project: prototype.project,
+      scenes: { [scene.sceneId]: scene },
+      assets: installed.manifest,
+      prefabs: prototype.prefabs,
+    },
+    { generatedAt: "2026-01-01T00:00:00.000Z" },
+  );
+  const source =
+    compiled.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(compiled.canStage, "A World with a river must stay stageable");
+  assert(
+    source.includes("xriftWaterFlowNoise") && source.includes('"WATER_FLOW":"1"'),
+    "The river GLSL or its define was not emitted into the compiled World",
+  );
+  assert(
+    source.includes('"uWindSpeed":{"kind":"number","value":0}'),
+    "Still air must stop the wind's share of a river",
+  );
+  assert(
+    source.includes('"uFlowSpeed":{"kind":"number","value":0.85}'),
+    "Still air must not stop the current, and the author's flow speed must reach the World",
   );
 }
 
