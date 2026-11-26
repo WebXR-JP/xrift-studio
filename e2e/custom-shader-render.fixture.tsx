@@ -18,6 +18,16 @@ extend(THREE);
 const directory = "/node_modules/.cache/xrift-studio/custom-shader-render-parity/";
 const SIZE = 160;
 const TEXTURE_UNIFORMS = ["uPicture", "uData", "uLut", "uSky"];
+/** The samplers of the third Material: with and without mip levels, and anisotropy. */
+const SAMPLER_UNIFORMS = ["uPlain", "uMipped", "uMippedNearest", "uFlat", "uSlanted"];
+const FILTER_NAMES: Record<number, string> = {
+  [THREE.NearestFilter]: "nearest",
+  [THREE.LinearFilter]: "linear",
+  [THREE.NearestMipmapNearestFilter]: "nearest-mipmap-nearest",
+  [THREE.NearestMipmapLinearFilter]: "nearest-mipmap-linear",
+  [THREE.LinearMipmapNearestFilter]: "linear-mipmap-nearest",
+  [THREE.LinearMipmapLinearFilter]: "linear-mipmap-linear",
+};
 /** Edit, the generated World, the Runtime JSON adapter from source and the built shell. */
 type Mode = "edit" | "jsx" | "runtime" | "shell";
 type ShaderMesh = THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -42,7 +52,7 @@ export async function renderCustomShaderParity(mode: Mode) {
     const mesh = entity.components.find((component): component is MeshComponent => component.type === "mesh")!;
     return { mesh, material: assets.assets[mesh.materialBindings[0]!.materialAssetId] as MaterialAsset };
   };
-  const [plainSource, glowSource] = entities.map(materialOf) as [ReturnType<typeof materialOf>, ReturnType<typeof materialOf>];
+  const [plainSource, glowSource, samplerSource] = entities.map(materialOf) as [ReturnType<typeof materialOf>, ReturnType<typeof materialOf>, ReturnType<typeof materialOf>];
 
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setSize(SIZE, SIZE);
@@ -80,6 +90,15 @@ export async function renderCustomShaderParity(mode: Mode) {
   };
   const glows = (mesh: ShaderMesh) => "GLOW" in (mesh.material.defines ?? {});
   const ready = (mesh: ShaderMesh) => TEXTURE_UNIFORMS.every((name) => mesh.material.uniforms[name]?.value);
+  /** The mesh of the third Material, once every one of its samplers has its picture. */
+  const samplerMesh = () => {
+    let found: ShaderMesh | undefined;
+    scene.traverse((object) => {
+      const mesh = object as ShaderMesh;
+      if (mesh.isMesh && !Array.isArray(mesh.material) && mesh.material.uniforms?.uMipped) found = mesh;
+    });
+    return found && SAMPLER_UNIFORMS.every((name) => found!.material.uniforms[name]?.value) ? found : undefined;
+  };
   async function waitFor<T>(read: () => T | undefined | false, what: string): Promise<T> {
     for (let attempt = 0; attempt < 500; attempt += 1) {
       const value = read();
@@ -95,11 +114,14 @@ export async function renderCustomShaderParity(mode: Mode) {
     <PrimitiveMeshVisual key={key} component={source.mesh} primitive="plane" material={material} assets={assets}
       projectPath="custom-shader-render-parity" selected={false} materialDropHighlighted={false} viewportMaterialStyle="scene" />
   );
-  /** Six meshes per Material, as a world built from code repeats one shader. */
-  const editorMeshes = (firstGlowMaterial = glowSource.material) => [0, 1, 2, 3, 4, 5].flatMap((index) => [
-    editorMesh(`plain-${index}`, plainSource),
-    editorMesh(`glow-${index}`, glowSource, index === 0 ? firstGlowMaterial : glowSource.material),
-  ]);
+  /** Six meshes per Material, as a world built from code repeats one shader, and the sampler plane. */
+  const editorMeshes = (firstGlowMaterial = glowSource.material) => [
+    ...[0, 1, 2, 3, 4, 5].flatMap((index) => [
+      editorMesh(`plain-${index}`, plainSource),
+      editorMesh(`glow-${index}`, glowSource, index === 0 ? firstGlowMaterial : glowSource.material),
+    ]),
+    editorMesh("samplers", samplerSource),
+  ];
   const publishedMesh = (Material: React.ComponentType) => <mesh><planeGeometry args={[1, 1]} /><Material /></mesh>;
 
   try {
@@ -122,6 +144,7 @@ export async function renderCustomShaderParity(mode: Mode) {
     }, "the Custom Shader meshes did not load");
     const plain = meshes.find((mesh) => !glows(mesh))!;
     const glow = meshes.find(glows)!;
+    const samplers = await waitFor(samplerMesh, "the sampler plane did not load");
 
     const show = (visible: ShaderMesh) => scene.traverse((object) => {
       const drawable = object as THREE.Mesh & THREE.Line & THREE.Points & THREE.Sprite;
@@ -155,10 +178,42 @@ export async function renderCustomShaderParity(mode: Mode) {
     show(plain);
     const plainFar = frame(slideRight, black);
     for (const mesh of [plain, glow]) mesh.geometry.boundingSphere = null;
+    show(samplers);
+    const sampled = frame(slideRight, black);
+
+    // How each sampler is set: on the three.js texture, and on the GPU object
+    // the frame above was drawn from.
+    const gl = renderer.getContext();
+    const anisotropic = gl.getExtension("EXT_texture_filter_anisotropic");
+    const glFilterNames: Record<number, string> = {
+      [gl.NEAREST]: "NEAREST", [gl.LINEAR]: "LINEAR",
+      [gl.NEAREST_MIPMAP_NEAREST]: "NEAREST_MIPMAP_NEAREST", [gl.NEAREST_MIPMAP_LINEAR]: "NEAREST_MIPMAP_LINEAR",
+      [gl.LINEAR_MIPMAP_NEAREST]: "LINEAR_MIPMAP_NEAREST", [gl.LINEAR_MIPMAP_LINEAR]: "LINEAR_MIPMAP_LINEAR",
+    };
+    const samplerState = Object.fromEntries(SAMPLER_UNIFORMS.map((name) => {
+      const texture = samplers.material.uniforms[name]!.value as THREE.Texture;
+      const handle = (renderer.properties.get(texture) as { __webglTexture?: WebGLTexture }).__webglTexture;
+      const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+      gl.bindTexture(gl.TEXTURE_2D, handle ?? null);
+      const gpu = handle ? {
+        minFilter: glFilterNames[gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER) as number],
+        magFilter: glFilterNames[gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER) as number],
+        anisotropy: anisotropic ? gl.getTexParameter(gl.TEXTURE_2D, anisotropic.TEXTURE_MAX_ANISOTROPY_EXT) as number : null,
+      } : null;
+      gl.bindTexture(gl.TEXTURE_2D, bound);
+      return [name, {
+        generateMipmaps: texture.generateMipmaps,
+        minFilter: FILTER_NAMES[texture.minFilter], magFilter: FILTER_NAMES[texture.magFilter],
+        anisotropy: texture.anisotropy, gpu,
+      }];
+    }));
 
     const report = {
       mode,
-      frames: { plainRight, plainLeft, glowBlack, glowGrey, glowFar, plainFar },
+      frames: { plainRight, plainLeft, glowBlack, glowGrey, glowFar, plainFar, sampled },
+      samplerState,
+      /** The most samples the GPU offers, or null without the extension. */
+      maxAnisotropy: anisotropic ? gl.getParameter(anisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT) as number : null,
       time,
       frustumCulled: { plain: plain.frustumCulled, glow: glow.frustumCulled },
       blending: { plain: plain.material.blending, glow: glow.material.blending },

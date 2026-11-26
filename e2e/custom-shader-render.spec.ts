@@ -108,6 +108,40 @@ test("カスタムシェーダーの新しいuniformと合成・カリングの�
   expect(edit.frames.glowFar).toBe(edit.frames.glowBlack);
   expect(decode(edit.frames.plainFar).some((_value, index) => index % 4 === 0 && lit(decode(edit.frames.plainFar), index))).toBe(false);
 
+  // The sampler plane, five bands from the bottom, each sampled much smaller
+  // than its picture. Only a sampler that reads mip levels shows the average.
+  await info.attach("custom-shader-sampled.png", { body: png(decode(edit.frames.sampled)), contentType: "image/png" });
+  const sampled = decode(edit.frames.sampled);
+  /** The red channel inside one band of the plane, which covers pixels 40 to 119 both ways. */
+  const band = (index: number) => {
+    const values: number[] = [];
+    for (let y = 40 + 16 * index + 3; y < 40 + 16 * index + 13; y += 1) {
+      for (let x = 44; x < 116; x += 1) values.push(sampled[(y * SIZE + x) * 4]!);
+    }
+    return values;
+  };
+  /** The share of a band further than `by` from the average of black and white. */
+  const offGrey = (values: number[], by: number) => values.filter(value => Math.abs(value - 127.5) > by).length / values.length;
+  // Without mip levels the checker aliases: most pixels are not its average.
+  expect(offGrey(band(0), 2), "the checker without mip levels").toBeGreaterThan(0.5);
+  // With mip levels, linear or nearest, every pixel is the average.
+  expect(offGrey(band(1), 2), "the checker through mip levels").toBe(0);
+  expect(offGrey(band(2), 2), "the checker through mip levels, nearest").toBe(0);
+  // Seen at a slant, mip levels alone blur the stripes away. Anisotropy keeps
+  // them. The renderer is the one playwright.config.ts fixes, so these pixels
+  // do not depend on the GPU of the machine that runs the test.
+  expect(offGrey(band(3), 2), "the stripes at a slant without anisotropy").toBe(0);
+  expect(offGrey(band(4), 60), "the stripes at a slant with anisotropy").toBeGreaterThan(0.5);
+  const sampler = (generateMipmaps: boolean, minFilter: string, magFilter: string, anisotropy: number) => ({
+    generateMipmaps, minFilter, magFilter, anisotropy,
+    gpu: {
+      minFilter: minFilter.toUpperCase().replaceAll("-", "_"), magFilter: magFilter.toUpperCase(),
+      // three.js writes the anisotropy only where it applies, and a GPU caps it at what it offers.
+      anisotropy: edit.maxAnisotropy === null ? null : Math.min(anisotropy, edit.maxAnisotropy),
+    },
+  });
+  expect(edit.maxAnisotropy, "the test GPU must offer anisotropic filtering").toBeGreaterThanOrEqual(8);
+
   for (const report of reports) {
     expect(report.glError, report.mode).toBe(0);
     expect(report.time[0], report.mode).toBeCloseTo(Math.PI / 2, 6);
@@ -115,16 +149,25 @@ test("カスタムシェーダーの新しいuniformと合成・カリングの�
     expect(report.frustumCulled, report.mode).toEqual({ plain: true, glow: false });
     expect(report.blending, report.mode).toEqual(edit.blending);
     expect(report.floatData, report.mode).toBe(true);
-    // The picture, the float data, the 3D table and the cube: one each on the GPU.
-    expect(report.gpuTextures, report.mode).toBe(4);
+    // How every path set each sampler, on the texture and on the GPU.
+    expect(report.samplerState, report.mode).toEqual({
+      uPlain: sampler(false, "linear", "linear", 1),
+      uMipped: sampler(true, "linear-mipmap-linear", "linear", 1),
+      uMippedNearest: sampler(true, "nearest-mipmap-linear", "nearest", 1),
+      uFlat: sampler(true, "linear-mipmap-linear", "linear", 1),
+      uSlanted: sampler(true, "linear-mipmap-linear", "linear", 8),
+    });
+    // The picture, the float data, the 3D table and the cube: one each on the
+    // GPU. The checker and the stripes: one for each way they are sampled.
+    expect(report.gpuTextures, report.mode).toBe(9);
     for (const [name, frame] of Object.entries(report.frames)) {
       expect(frame === edit.frames[name as keyof typeof edit.frames], `${report.mode} ${name}`).toBe(true);
     }
   }
-  // Twelve editor meshes, two Materials: every file was read once.
-  expect(Object.keys(edit.reads)).toHaveLength(9);
+  // Thirteen editor meshes, three Materials: every file was read once.
+  expect(Object.keys(edit.reads)).toHaveLength(11);
   expect(Object.values(edit.reads).every(count => count === 1), JSON.stringify(edit.reads)).toBe(true);
-  expect(edit.cachedTextures).toBe(9);
+  expect(edit.cachedTextures).toBe(11);
   // Taking the Material off gives the mesh its culling back.
   expect(reports.filter(report => report.swapped).map(report => [report.mode, report.swapped])).toEqual([["edit", [true, false]], ["jsx", [true, false]]]);
   expect(errors).toEqual([]);

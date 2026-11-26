@@ -67,6 +67,37 @@ void main() {
 #endif
 }`;
 
+// A plane that reads two pictures through five samplers, each drawn much
+// smaller than it is, so that only a sampler that reads mip levels shows the
+// average of the picture. Five bands from the bottom.
+const SAMPLER_VERTEX = `varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+const SAMPLER_FRAGMENT = `uniform sampler2D uPlain;
+uniform sampler2D uMipped;
+uniform sampler2D uMippedNearest;
+uniform sampler2D uFlat;
+uniform sampler2D uSlanted;
+varying vec2 vUv;
+void main() {
+  // The checker tiled 7.3 times: one pixel of the frame covers almost six texels.
+  vec2 tiled = vUv * 7.3;
+  // The stripes squeezed along x only, as a floor is seen at a slant: one
+  // pixel covers 32 texels across and 4 down.
+  vec2 slanted = vec2(vUv.x * 40.0, vUv.y * 5.0);
+  // Every sampler is read outside the branch, where its derivatives are defined.
+  vec3 plain = texture2D(uPlain, tiled).rgb;
+  vec3 mipped = texture2D(uMipped, tiled).rgb;
+  vec3 mippedNearest = texture2D(uMippedNearest, tiled).rgb;
+  vec3 flat_ = texture2D(uFlat, slanted).rgb;
+  vec3 slantedColor = texture2D(uSlanted, slanted).rgb;
+  float band = floor(vUv.y * 5.0);
+  vec3 color = band < 1.0 ? plain : band < 2.0 ? mipped : band < 3.0 ? mippedNearest : band < 4.0 ? flat_ : slantedColor;
+  gl_FragColor = vec4(color, 1.0);
+}`;
+
 /** An 8-bit RGBA PNG, top row first. */
 function png(width, height, texel) {
   const row = width * 4 + 1;
@@ -120,6 +151,12 @@ function png(width, height, texel) {
     // blue the row counted from the top, so a lookup shows which axis is which.
     "parity-lut": { name: "lut.png", bytes: png(16, 4, (x, y) => [(x >> 2) * 85, (x & 3) * 85, y * 85, 255]), width: 16, height: 4 },
     "parity-data": { name: "data.exr", bytes: exr, environment: true },
+    // Black and white texels in turn: any average of it is mid grey, and any
+    // single texel is not.
+    "parity-checker": { name: "checker.png", bytes: png(64, 64, (x, y) => { const v = ((x ^ y) & 1) * 255; return [v, v, v, 255]; }), width: 64, height: 64 },
+    // Rows of black and white, eight texels each: grey once averaged down, but
+    // unchanged along x.
+    "parity-stripes": { name: "stripes.png", bytes: png(64, 64, (_x, y) => { const v = ((y >> 3) & 1) * 255; return [v, v, v, 255]; }), width: 64, height: 64 },
     ...Object.fromEntries(faceColors.map((color, face) => [
       `parity-face-${face}`,
       { name: `face-${face}.png`, bytes: png(4, 4, () => [...color, 255]), width: 4, height: 4 },
@@ -166,9 +203,26 @@ function png(width, height, texel) {
     material("custom-shader-parity-glow", "Custom Shader parity glow", [
       { name: "glow", defines: { GLOW: "1" }, side: "double", transparent: true, depthWrite: false, blending: "additive", frustumCulled: false },
     ]),
+    // The sampler options: mip levels with each filter, and anisotropy.
+    {
+      id: "custom-shader-parity-samplers", name: "Custom Shader parity samplers", kind: "material", status: "ready", source: { kind: "document" },
+      properties: normalizeMaterialProperties({}),
+      shader: {
+        kind: "classic-r3f", sourceModulePath: "e2e://custom-shader-parity-samplers",
+        vertexShader: SAMPLER_VERTEX, fragmentShader: SAMPLER_FRAGMENT,
+        uniforms: {
+          uPlain: { kind: "texture", textureAssetId: "parity-checker" },
+          uMipped: { kind: "texture", textureAssetId: "parity-checker", generateMipmaps: true },
+          uMippedNearest: { kind: "texture", textureAssetId: "parity-checker", generateMipmaps: true, filter: "nearest" },
+          uFlat: { kind: "texture", textureAssetId: "parity-stripes", generateMipmaps: true },
+          uSlanted: { kind: "texture", textureAssetId: "parity-stripes", generateMipmaps: true, anisotropy: 8 },
+        },
+        variants: [{ name: "default", defines: {}, side: "double", transparent: false, depthWrite: true }],
+      },
+    },
   ];
 
-  // Two planes at the origin, one per Material, and nothing else to draw.
+  // Three planes at the origin, one per Material, and nothing else to draw.
   const project = createPrototypeProject("world", "custom-shader-render-parity");
   for (const asset of [...textures, ...materials]) project.assets.assets[asset.id] = asset;
   const plane = BUILTIN_PRIMITIVE_CREATION_CATALOG.find((definition) => definition.primitive === "plane");
@@ -223,7 +277,7 @@ function png(width, height, texel) {
     if (file.relativePath === "src/World.tsx") {
       // The emitted World, unchanged. Its two Material components and the
       // documents they were compiled from are exported for the page.
-      const names = materials.map((entry) => {
+      const names = materials.slice(0, 2).map((entry) => {
         const stem = entry.id.replace(/[^a-zA-Z0-9_$]+/g, "_");
         const name = new RegExp(`^const (CompiledMaterial_${stem}_[0-9a-f]{8}):`, "m").exec(source)?.[1];
         if (!name) throw new Error(`Published Custom Shader component not emitted for ${entry.id}`);
