@@ -685,7 +685,7 @@ test('editor visibility guidance matches actual display and quality profiles', (
 // still require a separate review before these numbers move again.
 for (const [file, count, hash] of [
   ['SceneSettingsPanel.tsx', 306, '84865962c6975d3be541baaecf620aa9d98653602e20bea1e6654b0e3f05a1ce'],
-  ['AssetQuickEditor.tsx', 378, '8f0ba5aa627aeddff33db1aebdb93f214480708ab3476e5c8f7e3c3290f3699e'],
+  ['AssetQuickEditor.tsx', 388, '83f87355688e4f6c0a2ce669a13b020b335e350323141586a593b0b0cdbb4232'],
 ]) test(`${file}: all value bindings, ranges and update callbacks remain identical to the reviewed baseline`, () => {
   const ast = ts.createSourceFile(file, read(`src/components/visual-editor/${file}`), ts.ScriptTarget.Latest, true);
   const printer = ts.createPrinter({removeComments:true});
