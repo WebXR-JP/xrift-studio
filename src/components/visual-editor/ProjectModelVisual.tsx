@@ -1,6 +1,7 @@
 import { applyOpenBrushMaterialProperties } from "../../../packages/xrift-studio-runtime/src/open-brush/material-properties";
 import { attachMToonOutlines, createMToonMaterial, removeNativeMToonOutlines, updateMToonMaterials } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
 import { bindVrmSpringBones, prepareVrmSpringBones, type VrmSpringBoneRuntime } from "../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
+import { registerGltfInstanceAttributes } from "../../../packages/xrift-studio-runtime/src/gltf-instance-attributes";
 import {
   useEffect,
   useLayoutEffect,
@@ -1794,6 +1795,9 @@ async function parseSelfContainedModel(
     loader.setDRACOLoader(
       new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco")),
     );
+    // EXT_mesh_gpu_instancingの独自属性を、インスタンスごとの値として届ける。
+    // 公開物とRuntimeも同じ処理を登録する。
+    registerGltfInstanceAttributes(loader);
     if (format === "vrm") {
       loader.register((parser) => {
         const plugin = new VRMLoaderPlugin(parser);

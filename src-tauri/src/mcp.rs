@@ -3098,7 +3098,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "capture_scene_debug",
-            "description": "Read live Scene View renderer metrics or start/stop a bounded, MCP-owned WebM capture. This does not change SceneDocument, AssetManifest, selection, or Undo history. metrics returns FPS, frame time, draw calls, triangles, visible mesh count, geometry/texture memory counts, and camera Far. start accepts durationMs from 1000 to 15000; stop saves the recording to the app debug-captures directory and returns its path.",
+            "description": "Read live Scene View renderer metrics or start/stop a bounded, MCP-owned WebM capture. This does not change SceneDocument, AssetManifest, selection, or Undo history. metrics returns FPS, frame time, draw calls, triangles, visible mesh count, geometry/texture memory counts, and camera Far. start accepts durationMs from 1000 to 15000; stop saves the recording to the app debug-captures directory and returns its path. The clip records the Scene View as shown, editing helpers included; for a take without them use set_recording_viewport with showEditorHelpers:false and start_recording, and for one still frame use capture_scene_view with showEditorHelpers:false.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3113,13 +3113,14 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "capture_scene_view",
-            "description": "Return the rendered Scene View as an MCP image, with a saved PNG path for reference. No external file access is needed. Point the camera with set_scene_view_camera first. For world authoring, set authoringView to spawn (camera at spawn eye height) or iso (isometric camera); this records a capture ID for review_world_authoring. Changes no scene content.",
+            "description": "Return the rendered Scene View as an MCP image, with a saved PNG path for reference. No external file access is needed. Point the camera with set_scene_view_camera first. By default the picture is the Scene View as the author sees it, editing helpers included: the grid, the transform gizmo, selection and Collider outlines, and light, audio and spawn markers. Pass showEditorHelpers:false to compare the world itself with a reference: that one frame is drawn without those helpers and in the Scene display mode, the way thumbnails and the recording view draw it, and the Scene View then returns to what it showed. The selection and saved settings such as editor.gizmo.gridVisible stay as they are, so never change them to clean a capture. A showEditorHelpers that is not a boolean is rejected with INVALID_ARGUMENT. For world authoring, set authoringView to spawn (camera at spawn eye height) or iso (isometric camera); this records a capture ID for review_world_authoring. Changes no scene content.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string", "minLength": 1 },
                     "sceneId": { "type": "string", "minLength": 1 },
-                    "authoringView": { "type": "string", "enum": ["spawn", "iso"] }
+                    "authoringView": { "type": "string", "enum": ["spawn", "iso"] },
+                    "showEditorHelpers": { "type": "boolean", "description": "Default true. false leaves the grid, gizmo, selection outline and helper markers out of this frame only." }
                 },
                 "required": ["projectId", "sceneId"],
                 "additionalProperties": false
@@ -4899,6 +4900,28 @@ mod tests {
         let instructions = mcp_authoring_instructions();
         for expected in ["create_prefab", "update_prefab_from_source", "get_editor_context"] {
             assert!(instructions.contains(expected), "shared guidance must reach MCP clients: {expected}");
+        }
+    }
+
+    #[test]
+    fn scene_view_capture_can_leave_editing_helpers_out_of_one_frame() {
+        let tools = tool_definitions();
+        let find = |name: &str| tools.as_array().unwrap().iter().find(|tool| tool["name"] == name).unwrap();
+        let capture = find("capture_scene_view");
+        assert_eq!(capture["inputSchema"]["properties"]["showEditorHelpers"]["type"], "boolean");
+        // Optional: a client that omits it keeps receiving the picture it always did.
+        assert_eq!(capture["inputSchema"]["required"], json!(["projectId", "sceneId"]));
+        let description = capture["description"].as_str().unwrap();
+        for expected in ["showEditorHelpers:false", "grid", "gizmo", "selection", "Scene display mode", "returns to what it showed", "editor.gizmo.gridVisible", "INVALID_ARGUMENT"] {
+            assert!(description.contains(expected), "capture_scene_view must explain {expected}");
+        }
+        // The same name means the same thing where a take is recorded.
+        assert_eq!(find("set_recording_viewport")["inputSchema"]["properties"]["showEditorHelpers"]["type"], "boolean");
+        // The debug clip records what is on screen, so it points at the tools that draw a clean one.
+        let debug = find("capture_scene_debug");
+        assert!(debug["inputSchema"]["properties"].get("showEditorHelpers").is_none());
+        for expected in ["set_recording_viewport", "capture_scene_view"] {
+            assert!(debug["description"].as_str().unwrap().contains(expected), "capture_scene_debug must name {expected}");
         }
     }
 

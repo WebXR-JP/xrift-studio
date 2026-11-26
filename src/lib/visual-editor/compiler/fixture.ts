@@ -1,4 +1,5 @@
 import { filterFiles, parseWorldConfig } from "@xrift/sdk";
+import gltfInstanceAttributesSource from "../../../../packages/xrift-studio-runtime/src/gltf-instance-attributes.ts?raw";
 import { Color, SRGBColorSpace } from "three";
 import {
   normalizeTextureImportSettings,
@@ -2399,7 +2400,7 @@ export function runVisualCompilerFixtureAssertions(
     (file) => file.relativePath === "src/World.tsx",
   )?.content ?? "";
   assert(unposedModelResult.canStage &&
-    unposedModelSource.includes("const { scene, parser } = useLoader(GLTFLoader, modelUrl);") &&
+    unposedModelSource.includes("const { scene, parser } = useLoader(GLTFLoader, modelUrl, registerGltfInstanceAttributes);") &&
     unposedModelSource.includes("object={scene}") &&
     unposedModelSource.includes("(parser.associations)"),
   "Default same-name assignments need parser associations even without pose or node overrides");
@@ -2496,9 +2497,24 @@ export function runVisualCompilerFixtureAssertions(
       modelSource,
     ) &&
       modelSource.includes("const modelUrl = useCompiledAssetUrl(") &&
-      modelSource.includes("useLoader(GLTFLoader, modelUrl)"),
+      modelSource.includes("useLoader(GLTFLoader, modelUrl, registerGltfInstanceAttributes)"),
     "Project GLB loader did not use the XRift base URL",
   );
+  // Custom per-instance attributes reach a shader through the module the
+  // Editor's loader registers. The published world ships that very source
+  // and passes it to every glTF load: useLoader keeps one result per URL, so
+  // a load that skipped it would decide what every other user of the Model
+  // receives.
+  assert(
+    modelSource.includes(
+      'import { registerGltfInstanceAttributes } from "./xrift-studio/gltf-instance-attributes";',
+    ) &&
+      modelResult.overlayFiles.find(
+        (file) => file.relativePath === GLTF_INSTANCE_ATTRIBUTES_OVERLAY_PATH,
+      )?.content === gltfInstanceAttributesSource,
+    "A published GLB must load through the instance attribute module the Editor uses",
+  );
+  assertEveryGltfLoadRegistersInstanceAttributes(modelSource, "Project GLB");
 
   /*
    * A Mesh Collider on an expanded shared-Model node.
@@ -2572,6 +2588,7 @@ export function runVisualCompilerFixtureAssertions(
       nodeColliderSource.includes("xriftSourceNodeIndex === 0"),
     "A Model node's Mesh Collider must emit that node's collision geometry",
   );
+  assertEveryGltfLoadRegistersInstanceAttributes(nodeColliderSource, "Model node Collider");
   assert(
     !/<RigidBody[^>]*>\s*<\/RigidBody>/.test(nodeColliderSource),
     "A Model node's RigidBody must not be emitted empty",
@@ -2916,10 +2933,11 @@ export function runVisualCompilerFixtureAssertions(
       dracoSource.includes(
         "const dracoDecoderPath = useCompiledDracoDecoderPath();",
       ) &&
-      dracoSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath)))") &&
+      dracoSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => registerGltfInstanceAttributes(loader).setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath)))") &&
       !dracoSource.includes("gstatic.com"),
     "A Draco Model must load through the world's own decoder, never a CDN",
   );
+  assertEveryGltfLoadRegistersInstanceAttributes(dracoSource, "Draco Model");
   const dracoCopyTargets = dracoResult.stagingPlan.bundledAssetCopyPlan
     .filter((entry) => entry.source === "three-draco")
     .map((entry) => entry.targetRelativePath);
@@ -3050,6 +3068,7 @@ export function runVisualCompilerFixtureAssertions(
       !openBrushSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => {"),
     "Open Brush must have its own loader constructor so useLoader cannot apply its plugin to ordinary glTF",
   );
+  assertEveryGltfLoadRegistersInstanceAttributes(openBrushSource, "Open Brush Model");
   assert(
     modelSource.includes("useLoader(GLTFLoader, modelUrl") &&
       !modelSource.includes("CompiledOpenBrushGLTFLoader"),
@@ -3291,7 +3310,7 @@ export function runVisualCompilerFixtureAssertions(
     assert(animationResult.canStage, "Animated GLB should be stageable");
     [
       "useAnimations",
-      "const { scene, parser, animations } = useLoader(GLTFLoader, modelUrl);",
+      "const { scene, parser, animations } = useLoader(GLTFLoader, modelUrl, registerGltfInstanceAttributes);",
       "const animationRoot = useRef<Group>(null);",
       "const { mixer, clips } = useAnimations(animations, animationRoot);",
       "createXriftAnimationRuntimeBridge",
@@ -3572,7 +3591,7 @@ export function runVisualCompilerFixtureAssertions(
     assert(hierarchyResult.canStage, "Static hierarchy GLB should be stageable");
     assert(
       hierarchySource.includes(
-        "const { scene, parser } = useLoader(GLTFLoader, modelUrl);",
+        "const { scene, parser } = useLoader(GLTFLoader, modelUrl, registerGltfInstanceAttributes);",
       ) && hierarchySource.includes("<group scale={1}>") &&
         hierarchySource.includes("const cloneRoot: Object3D = sourceRoot && !hasSkinnedMesh ? sourceRoot : scene;") &&
         hierarchySource.includes("cloneSkeleton(cloneRoot)"),
@@ -3675,6 +3694,13 @@ export function runVisualCompilerFixtureAssertions(
         entry.targetRelativePath.endsWith("fixture.obj"),
     ),
     "OBJ copy plan support flag is incorrect",
+  );
+  assert(
+    !posedObjSource.includes("registerGltfInstanceAttributes") &&
+      !posedObjResult.overlayFiles.some(
+        (file) => file.relativePath === GLTF_INSTANCE_ATTRIBUTES_OVERLAY_PATH,
+      ),
+    "A world without a glTF Model must not ship the glTF instance attribute module",
   );
 
   const classicTexture: TextureAsset = {
@@ -4514,6 +4540,28 @@ function extractNamedEntitySource(source: string, entityName: string): string {
     if (depth === 0) return source.slice(start, groupTag.lastIndex);
   }
   throw new Error(`Generated Entity group is not closed: ${entityName}`);
+}
+
+const GLTF_INSTANCE_ATTRIBUTES_OVERLAY_PATH =
+  "src/xrift-studio/gltf-instance-attributes.ts";
+
+/** Every emitted glTF load, whichever loader class it uses, registers the module. */
+function assertEveryGltfLoadRegistersInstanceAttributes(
+  source: string,
+  label: string,
+): void {
+  const loads = [
+    ...source.matchAll(/useLoader\((?:Compiled\w+)?GLTFLoader, modelUrl(.*)\);/g),
+  ];
+  assert(loads.length > 0, `${label} did not emit a glTF load`);
+  for (const load of loads) {
+    assert(
+      /^, (?:registerGltfInstanceAttributes|\(loader\) => registerGltfInstanceAttributes\(loader\)\.)/.test(
+        load[1] ?? "",
+      ),
+      `${label} loads a glTF without its instance attributes: ${load[0]}`,
+    );
+  }
 }
 
 function assert(condition: unknown, message: string): asserts condition {

@@ -239,11 +239,17 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 パラメーターと範囲と既定値を含む。`create_material_from_preset`はマテリアル
 を作る。`nextStep`を返す。空はシーンsettingsのskyboxが指して初めて空に
 なる。水は板ポリへ割り当てて初めて水面になる。作っただけでは終わらない。
+水のうち`category: "river"`の項目は流れる川で、向きと中心線を割り当て先のメッシュから取る。
+`nextStep`は細長い水平のPlaneへ割り当てること、Entityの回転で向きを決めること、
+`uChannelWidth`をPlaneの幅に合わせることを返す。川の流れは`uFlowSpeed`で進み、
+シーンの風が止まっていても動く。ほかの水は風が止まると動かない。違いは各項目の`notes`にも入る。
 空の背景の各項目は`qualityOptions`に軽量・標準・高精細のvariantsと説明を返す。
 作成後の`update_custom_shader`へ`patch.variants`として渡すとUniformを保って品質を変えられる。
 独自variantがある場合は`get_custom_shader`で取得し、品質用definesだけを統合する。
 ストアの見回し・再生停止は一時的なプレビュー操作なのでMCPには追加しない。
 地形の地面は形と一緒に選ぶ。`list_terrain_presets`の方にある。
+
+Custom ShaderをModelへ`set_material`で割り当てると、頂点シェーダーはそのMeshの属性を名前で読む。glTFの独自属性は小文字の名前になるため、`_AMAT`は`attribute float _amat;`と宣言する。`EXT_mesh_gpu_instancing`のインスタンスごとの独自属性はインスタンスごとに1つの値で届き、`_aoffset`と`_AOFFSET`のどちらでも読める。インスタンスの配置には`instanceMatrix`を使う。編集・Play・公開は同じ読み込み処理を使う。仕様は[3Dモデルの読み込み仕様](./MODEL_IMPORT_CONTRACT.md#インスタンスごとの属性)にある。
 
 カスタムシェーダーのGLSLは、Scene Viewのレンダラーでコンパイルして確かめる。`create_custom_shader`、`update_custom_shader`、`get_custom_shader`の結果には`compile`が入る。`compile.status`は`ok`、`error`、`pending`、`unknown`のいずれか。`error`のとき`compile.issues`は失敗したプログラムごとに1件で、GLSLコンパイラの出力をそのまま`programLog`、`vertexLog`、`fragmentLog`に持つ。`lines`の各要素は`stage`、作者のGLSLでの行`line`、ログに出た行`reportedLine`、`message`、該当行の本文`source`を持つ。ログの行番号はThree.jsが前に足すコードと`#include`の展開を数えるため、`line`と`reportedLine`は一致しない。`#include`の中で起きたエラーは、その`#include`の行と`include`の名前を返す。`#line`、展開されるループ、コンパイルした本文との照合で行を確定できない場合は、`line`を返さない。リンクの失敗は行を持たず、`programLog`に理由が入る。
 
@@ -561,6 +567,10 @@ SceneDocumentを書き換えない。現在表示中のSceneの読取、camera�
   カメラの奥を返す。WebMの録画もstart / stopで扱う
 - `save_scene`は通常のEditor自動保存をflushし、同じSceneが保存された場合だけfingerprintを返す。保存中にSceneが変われば再保存を求める。
 - `capture_scene_view`は描画したPNGを1枚、appの`debug-captures`へ保存し、パスを返す。数値やdocumentの確認に加え、この画像で実際の表示を確認する。
+  既定では、作者が見ているScene Viewをそのまま返す。グリッド、ギズモ、選択とColliderの枠、ライト・音・スポーンの目印も写る。
+  参考画像とワールドそのものを見比べるときは`showEditorHelpers: false`を渡す。その1枚だけ、編集用の表示を除き、表示モードをSceneにして描画する。サムネイルと録画用の表示と同じ描き方で、撮影後のScene Viewは元の表示へ戻る。
+  選択と、`editor.gizmo.gridVisible`などの保存済みの設定は変わらない。撮影のためにこれらを書き換えない。ギズモを操作している間は撮影を待ち、操作が続いた場合はエラーを返す。booleanでない値は`INVALID_ARGUMENT`で拒否する。
+  `capture_scene_debug`の録画は、画面の表示をそのまま記録する。編集用の表示を除いた動画は、`set_recording_viewport`の`showEditorHelpers: false`と`start_recording`で撮る。
 - `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
   `back` `left` `right`) / 既定の斜め (`iso`) を選べる。`focusEntityId`でオブジェクトの
   実描画boundsへ寄る。あるいは`position`と`target`を直接指定する。プリセット

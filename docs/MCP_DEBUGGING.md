@@ -48,7 +48,7 @@ DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるM
 5. `read_logs`でconsole errorを確認
 6. Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`で通信を確認します。
 
-静止画は`capture_scene_view`、負荷や時間変化は`capture_scene_debug`を使います。録画が必要な場合の例。
+静止画は`capture_scene_view`、負荷や時間変化は`capture_scene_debug`を使います。グリッドやギズモを除いた静止画が必要な場合は、`capture_scene_view`へ`showEditorHelpers: false`を渡します。録画が必要な場合の例。
 
 ```json
 {"projectId":"…","sceneId":"…","action":"metrics"}

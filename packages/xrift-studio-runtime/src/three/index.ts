@@ -68,6 +68,7 @@ import { installMirrorReflectionInterval } from "../mirror-reflection.js";
 import { applyOpenBrushMaterialProperties } from "../open-brush/material-properties.js";
 import { createMToonMaterial, attachMToonOutlines, removeNativeMToonOutlines, type MToonSurfaceProperties } from "../mtoon-runtime.js";
 import { bindVrmSpringBones, prepareVrmSpringBones, type VrmSpringBoneRuntime } from "../vrm-spring-bone.js";
+import { registerGltfInstanceAttributes } from "../gltf-instance-attributes.js";
 export { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
   getKhrInteractivityOnStartAnimationCues,
@@ -352,7 +353,8 @@ export class XriftThreeLoader {
         sourceMaterials: new Map(),
       };
     }
-    const loader = new GLTFLoader(this.manager);
+    // Custom per-instance attributes reach shaders as they do in the Editor.
+    const loader = registerGltfInstanceAttributes(new GLTFLoader(this.manager));
     const isVrm = asset.sourceFormat === "vrm" || /\.vrm(?:[?#]|$)/i.test(asset.url);
     if (isVrm) {
       loader.register(parser => {

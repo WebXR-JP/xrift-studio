@@ -1949,10 +1949,12 @@ function ComponentVisual({
       //
       // The SpawnPoint is the exception, and stays helper-only: its marker is
       // dev-only in a published world, so drawing it in Play would put a green
-      // cylinder in front of a player who will never see one.
+      // cylinder in front of a player who will never see one. A frame drawn
+      // without helpers - a thumbnail, a clean recording, a capture - shows
+      // the published look as well, so it leaves the marker out too.
       return showHelpers ||
-        renderThumbnail ||
-        (playing && !isOfficialXriftEditorHelperComponent(component)) ? (
+        ((renderThumbnail || playing) &&
+          !isOfficialXriftEditorHelperComponent(component)) ? (
         <OfficialXriftComponentRenderer component={component} />
       ) : null;
     case "script":
@@ -5425,12 +5427,18 @@ export function SceneViewport({
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [recordingPanelOpen, setRecordingPanelOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
+  const [transformDragging, setTransformDragging] = useState(false);
   // A clean frame: no grid, gizmo, selection or helper icons. Thumbnails always
   // want one; the recording view wants one unless the author asked to keep
   // the editing helpers in the take.
   const reviewCaptureActive = Boolean(screenshotRequest?.modelView || screenshotRequest?.worldView);
+  // A screenshot can ask for the same frame, for as long as its request is
+  // pending. It waits out a gizmo drag: taking the gizmo from under the
+  // author's hand would drop the move they are making.
+  const helperFreeScreenshotActive =
+    screenshotRequest?.showEditorHelpers === false && !transformDragging;
   const cleanRender =
-    thumbnailCaptureActive || reviewCaptureActive ||
+    thumbnailCaptureActive || reviewCaptureActive || helperFreeScreenshotActive ||
     (recordingViewActive && !recordingViewport.showEditorHelpers);
   const defaultDisplayMode = getDefaultSceneViewportDisplayMode(projectKind);
   const [displayMode, setDisplayMode] = useState<SceneViewportDisplayMode>(
@@ -5520,7 +5528,6 @@ export function SceneViewport({
   useEffect(() => {
     if (editorMode !== "edit" || cleanRender || (activeTabId && activeTabId !== SCENE_VIEW_TAB_ID)) setContextMenu(null);
   }, [editorMode, cleanRender, activeTabId]);
-  const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
   const terrainPointerRef = useRef<{
     pointerId: number;
@@ -7346,6 +7353,7 @@ export function SceneViewport({
 
           <SceneScreenshotCapture
             request={screenshotRequest}
+            helpersHidden={cleanRender}
             onComplete={() => onScreenshotComplete?.()}
           />
 

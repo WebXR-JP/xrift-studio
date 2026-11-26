@@ -584,7 +584,7 @@
       "description": "空の背景にSkybox Shader、水面にWater Shaderを設定します。背景と照明の設定も説明します。",
       "group": "create",
       "file": "sky-and-water.md",
-      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 背景 HDRI IBL 風 360度 全天球 パノラマ PNG JPEG Equirectangular Skybox Texture 背景画像",
+      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 川 小川 早瀬 流れ 背景 HDRI IBL 風 360度 全天球 パノラマ PNG JPEG Equirectangular Skybox Texture 背景画像",
       "related": [
         "lighting",
         "external-resources",
@@ -849,11 +849,12 @@
       "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。コンパイルできないときの直し方も説明します。",
       "group": "materials-advanced",
       "file": "custom-shaders.md",
-      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR コンパイル エラー 表示されない コンパイラのログ",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR attribute 属性 インスタンス instancing EXT_mesh_gpu_instancing コンパイル エラー 表示されない コンパイラのログ",
       "related": [
         "materials",
         "sky-and-water",
-        "textures"
+        "textures",
+        "assets"
       ]
     },
     {

@@ -23,7 +23,7 @@ test("all water presets render through Three.js and retain the compiler contract
     } finally { release(); }
     return rendered;
   });
-  expect(result).toBe(63);
+  expect(result).toBe(72);
 });
 
 test("water store supports filtering, live preview, install failure and retry", async ({ page }) => {
@@ -57,5 +57,27 @@ test("water store supports filtering, live preview, install failure and retry", 
   await expect(page.getByText("「波のある海」をマテリアルとして追加しました。", { exact: false })).toBeVisible();
   await expect(search).toBeEnabled();
   await page.screenshot({ path: "test-results/water-shaders.png" });
+  expect(errors).toEqual([]);
+});
+
+test("river presets draw from the bank and say how they differ from wind-driven water", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const path = "/e2e/water-shaders.fixture.tsx";
+    (await import(/* @vite-ignore */ path)).mountWaterStore();
+  });
+  await page.getByRole("combobox", { name: "Water Shaderのカテゴリ" }).selectOption("river");
+  await expect(page.getByRole("heading", { name: "澄んだ小川", exact: true })).toBeVisible();
+  // One card per river, each a real render rather than a placeholder.
+  await expect(page.getByRole("img", { name: "Water Shaderの実描画プレビュー" })).toHaveCount(3);
+  await expect(page.locator("aside canvas")).toBeVisible();
+  await expect(page.getByText("割り当てたメッシュの中心線に沿ってまっすぐ流れ", { exact: false })).toBeVisible();
+  await expect(page.getByText("流れはシーンの風が止まっていても動き", { exact: false })).toBeVisible();
+  await page.locator("summary", { hasText: "演出" }).click();
+  await expect(page.getByLabel("流れの速さ")).toBeVisible();
+  await expect(page.getByLabel("川幅")).toBeVisible();
+  await page.screenshot({ path: "test-results/water-shaders-river.png" });
   expect(errors).toEqual([]);
 });
