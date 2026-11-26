@@ -103,6 +103,11 @@ jobs:
       - name: Verify bundled transparent PNG catalog and import integrity
         run: node --test scripts/transparent-textures.test.mjs
 
+      - name: Verify bundled tree models and foliage pictures
+        run: |
+          node scripts/generate-foliage-models.mjs --check
+          node --test scripts/foliage-models.test.mjs scripts/foliage-textures.test.mjs
+
       - name: Check spatial UI contracts and synchronized authoring guides
         run: |
           node scripts/sync-agent-skills.mjs --check

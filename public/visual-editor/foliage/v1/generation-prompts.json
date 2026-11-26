@@ -1,0 +1,20 @@
+[
+  {
+    "id": "foliage-leaves",
+    "tool": "Codex image generation (image_gen)",
+    "generatedOn": "2026-11-24",
+    "generatedSize": "2048x2048",
+    "inputImages": "none (text prompt only)",
+    "prompt": "Four separate sprigs of fresh green apple-tree leaves, each a short thin twig with seven to nine oval serrated leaves, arranged in a two by two grid with each sprig fully inside its own quarter and not touching the edges, photographed from directly above on a pure flat white background, no shadows on the background, natural daylight colours, high detail, no text.",
+    "processing": "The white background was keyed into the alpha channel. The colour of solid leaf pixels was spread under the soft edge so that no white fringe remains when the picture is filtered. Resized to 1024x1024 and saved as WebP with the colour under transparent pixels kept."
+  },
+  {
+    "id": "foliage-bark",
+    "tool": "Codex image generation (image_gen)",
+    "generatedOn": "2026-11-24",
+    "generatedSize": "2048x2048",
+    "inputImages": "none (text prompt only)",
+    "prompt": "Old apple tree bark: grey-brown furrowed bark broken into small irregular plates, patches of pale grey-green lichen and a little bright green moss in the cracks. Flat, even, shadowless diffuse lighting like an albedo scan, viewed straight on with no perspective, no vignette, fills the whole frame edge to edge, seamless tileable texture, photographic, high detail, no text, no watermark.",
+    "processing": "Made to tile by blending the picture with a copy of itself shifted by half its size along an uneven band. A height estimated from the picture's fine brightness detail was written into the alpha channel. Resized to 512x512 and saved as WebP."
+  }
+]

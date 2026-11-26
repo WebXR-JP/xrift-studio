@@ -224,7 +224,7 @@ export async function ensureCatalogMaterialTextures(
       if (bytes.byteLength !== definition.byteLength ||
           await sha256Bytes(bytes) !== definition.sha256) return null;
       const plan = await createAssetImportPlan({
-        fileName: definition.fileName, bytes, mimeType: "image/png",
+        fileName: definition.fileName, bytes, mimeType: definition.mimeType ?? "image/png",
         displayName: definition.displayName, folderId: null, existingManifest: next,
         textureImportSettings: { colorSpace: definition.colorSpace, flipY: false },
       });

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "foliage-leaves",
+    "fileName": "foliage-leaves.webp",
+    "name": "葉の小枝（2×2）",
+    "description": "葉の付いた小枝4本を2×2に並べた切り抜き画像です。RGBが色、Aが切り抜きの形です。",
+    "width": 1024,
+    "height": 1024,
+    "byteLength": 204596,
+    "sha256": "c0c2242b0eb59d9e40a421ed3bfbda92ead92137d1c3dafb90c45020d574881c"
+  },
+  {
+    "id": "foliage-bark",
+    "fileName": "foliage-bark.webp",
+    "name": "樹皮",
+    "description": "継ぎ目なく並べられる樹皮の画像です。RGBが色、Aが凹凸の高さです。",
+    "width": 512,
+    "height": 512,
+    "byteLength": 223560,
+    "sha256": "e0ea47af859c3490884fb143e2354a50c8e94a6de9c0d0a3b628a457b8b37aaa"
+  }
+]
