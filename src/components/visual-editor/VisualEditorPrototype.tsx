@@ -256,6 +256,7 @@ import {
   customShaderCompileStore,
 } from "../../lib/visual-editor/custom-shader-compile";
 import { AssetsPanel as AssetsPanelView } from "./AssetsPanel";
+import { ShaderEditorCompileNotice } from "./CustomShaderCompileNotice";
 import {
   ValueScrubContext,
   type ValueScrubTransaction,
@@ -13262,6 +13263,13 @@ export function VisualEditorPrototype({
               source={shaderEditorSource}
               loading={shaderEditor.state.loading}
               error={shaderEditor.state.error}
+              compileNotice={
+                <ShaderEditorCompileNotice
+                  assets={bundle.assets}
+                  target={shaderEditorRequest}
+                  stage={shaderEditorStage}
+                />
+              }
               onSave={shaderEditor.save}
               onDirtyChange={handleShaderEditorDirtyChange}
               onAutosaveReady={registerShaderAutosave}
@@ -13277,6 +13285,13 @@ export function VisualEditorPrototype({
               source={shaderEditorSource}
               loading={false}
               error={null}
+              compileNotice={
+                <ShaderEditorCompileNotice
+                  assets={bundle.assets}
+                  target={shaderEditorRequest}
+                  stage={shaderEditorRequest.stage}
+                />
+              }
               onSave={(source) =>
                 saveMaterialShaderSource(
                   shaderEditorRequest.assetId,
