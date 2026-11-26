@@ -88,6 +88,7 @@ import {
   terrainGrassRuntimeSource,
 } from "../terrain-grass-runtime";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
+import { xriftShaderSourceKey } from "../../../../packages/xrift-studio-runtime/src/shader-compile-errors";
 import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/scene-constants";
 import type { VisualProjectKind } from "../project-document";
 import {
@@ -139,6 +140,7 @@ import {
   createScriptAudioSourceOverlayFile,
   createScriptLightOverlayFile,
   createScriptParticleOverlayFile,
+  createShaderCompileWatchOverlayFiles,
   createTextPanelOverlayFiles,
   IMAGE_QUAD_RUNTIME_OVERLAY_PATH,
   planScriptEmission,
@@ -504,6 +506,9 @@ export function compileVisualProject(
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/lightmap-runtime"')) {
     overlayFiles.push(...createLightmapOverlayFiles());
+  }
+  if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/shader-compile-watch"')) {
+    overlayFiles.push(...createShaderCompileWatchOverlayFiles());
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/interactable"')) {
     overlayFiles.push(...createInteractableOverlayFiles().filter(file => !overlayFiles.some(existing => existing.relativePath === file.relativePath)));
@@ -1436,6 +1441,8 @@ function generateComponentSource(
   }
   const lightmapJsx = renderSceneLightmap(context, assetCopyPlan);
   if (lightmapJsx) roots.push(lightmapJsx);
+  const shaderErrorLogJsx = renderCustomShaderErrorLog(context);
+  if (shaderErrorLogJsx) roots.push(shaderErrorLogJsx);
   // Rendering deliberately stops below disabled Entities. Their descendants
   // remain structurally reachable and must not be diagnosed as orphaned.
   // Do not promote them to roots: that would resurrect intentionally hidden work.
@@ -6049,6 +6056,44 @@ function renderSceneLightmap(
 };`,
   );
   return "<XRiftStudioLightmap />";
+}
+
+/**
+ * Names a Custom Shader Material in the console when its GLSL does not compile
+ * in the published world.
+ *
+ * A Material drawn from generated code has no name, so the message three.js
+ * prints cannot say which Material failed. The world is told the names by the
+ * key of each Material's GLSL rather than by a tag on the Material, which
+ * leaves how a Material is built and drawn exactly as it was. Nothing is shown
+ * in the world; the editor is where the failure is presented to the author.
+ */
+function renderCustomShaderErrorLog(context: CompileContext): string | null {
+  const materials = [...context.referencedAssetIds].sort().flatMap((assetId) => {
+    const asset = context.assets.assets[assetId];
+    return asset?.kind === "material" &&
+      asset.shader?.kind === "classic-r3f" &&
+      validateClassicR3fMaterialShader(asset.shader).length === 0
+      ? [
+          {
+            name: asset.name,
+            key: xriftShaderSourceKey(
+              asset.shader.vertexShader,
+              asset.shader.fragmentShader,
+            ),
+          },
+        ]
+      : [];
+  });
+  if (materials.length === 0) return null;
+  context.extraImports.add(
+    'import { XriftCustomShaderErrorLog } from "./xrift-studio/shader-compile-watch";',
+  );
+  context.supportDeclarations.set(
+    "custom-shader-error-log",
+    `const CUSTOM_SHADER_MATERIAL_NAMES = ${JSON.stringify(materials)};`,
+  );
+  return "<XriftCustomShaderErrorLog materials={CUSTOM_SHADER_MATERIAL_NAMES} />";
 }
 
 /**

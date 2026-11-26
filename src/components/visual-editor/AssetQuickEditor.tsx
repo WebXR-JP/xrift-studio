@@ -74,6 +74,7 @@ import { formatFileSize } from "./editor-utils";
 import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import { CustomMaterialPreview } from "./CustomMaterialPreview";
+import { CustomShaderCompileNotice } from "./CustomShaderCompileNotice";
 import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
 import {
   ModelAssetInspector,
@@ -2016,6 +2017,7 @@ function CustomShaderQuickEditor({
               compact
             />
           </div>
+          <CustomShaderCompileNotice material={asset} />
           <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
             <span>保存すると、このマテリアルの使用箇所すべてに反映します。</span>
             <button

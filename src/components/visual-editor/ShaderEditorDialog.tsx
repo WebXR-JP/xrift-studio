@@ -1,5 +1,5 @@
 import Editor from "@monaco-editor/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ShaderAssetStage } from "../../lib/visual-editor";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { setupMonaco } from "../../lib/monaco";
@@ -14,6 +14,8 @@ export type ShaderEditorDialogProps = {
   source: string;
   loading: boolean;
   error: string | null;
+  /** Shown above the code: why the saved GLSL does not compile, if it does not. */
+  compileNotice?: ReactNode;
   onSave: (source: string) => Promise<void> | void;
   onDirtyChange?: (dirty: boolean) => void;
   onClose: () => void;
@@ -28,6 +30,7 @@ export function ShaderEditorDialog({
   source,
   loading,
   error,
+  compileNotice,
   onSave,
   onDirtyChange,
   onClose,
@@ -154,6 +157,7 @@ export function ShaderEditorDialog({
           {error ?? saveError}
         </p>
       ) : null}
+      {compileNotice}
 
       <div className="min-h-0 flex-1">
         {loading ? (
