@@ -3,11 +3,11 @@ const exportSet = /* @__PURE__ */ new Set(["Module", "__esModule", "default", "_
 let moduleMap = {
   "./Item": () => {
     dynamicLoadingCss([], false, "./Item");
-    return __federation_import("./__federation_expose_Item-Dy-YlmDs.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
+    return __federation_import("./__federation_expose_Item-CPvCM0mz.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
   },
   "./World": () => {
     dynamicLoadingCss([], false, "./World");
-    return __federation_import("./__federation_expose_World-BxV3D91s.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
+    return __federation_import("./__federation_expose_World-COObxSw0.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
   }
 };
 const seen = {};

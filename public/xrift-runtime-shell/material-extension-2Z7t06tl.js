@@ -1,4 +1,4 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
 
 const {FileLoader:$a0PbU$FileLoader,TextureLoader:$a0PbU$TextureLoader,GLSL3:$a0PbU$GLSL3,RepeatWrapping:$a0PbU$RepeatWrapping,UniformsLib:$a0PbU$UniformsLib,RawShaderMaterial:$a0PbU$RawShaderMaterial,Loader:$a0PbU$Loader,Vector4:$a0PbU$Vector4,Vector3:$a0PbU$Vector3,Clock:$a0PbU$Clock} = await importShared('three');
 

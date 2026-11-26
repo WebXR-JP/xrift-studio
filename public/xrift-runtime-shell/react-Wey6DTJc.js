@@ -1,4 +1,4 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
 import { c as createStore } from './vanilla-BBcibl5N.js';
 
 const React = await importShared('react');
