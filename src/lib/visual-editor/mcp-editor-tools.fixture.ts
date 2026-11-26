@@ -525,6 +525,39 @@ export function runXriftMcpEditorToolFixtures(): void {
       materialCapabilities.textureTransforms.cleanup.includes("Stop"),
     "Scripting capabilities should expose isolated Material Texture transforms",
   );
+  const uniformCapabilities = (
+    scriptingCapabilities.result.runtime as {
+      materials?: { uniforms?: Record<string, unknown> };
+    }
+  )?.materials?.uniforms;
+  assert(
+    materialCapabilities?.methods?.some((method) =>
+      method.includes("materials.setUniform(name, value)"),
+    ) &&
+      materialCapabilities.methods.some((method) =>
+        method.includes("materials.resetUniform(name)"),
+      ) &&
+      [
+        "targets",
+        "returns",
+        "shape",
+        "errors",
+        "clock",
+        "composition",
+        "isolation",
+        "cleanup",
+        "persistence",
+      ].every((key) => typeof uniformCapabilities?.[key] === "string") &&
+      String(uniformCapabilities?.targets).includes("get_custom_shader") &&
+      String(uniformCapabilities?.errors).includes("TypeError") &&
+      String(uniformCapabilities?.persistence).includes(
+        "update_custom_shader",
+      ) &&
+      String(uniformCapabilities?.example).includes(
+        'ctx.materials.setUniform("uWalker", position)',
+      ),
+    "Scripting capabilities should say how a Script drives Custom Shader uniforms",
+  );
   const persistentAssetOperations =
     scriptingCapabilities.result.persistentAuthoring as {
       groups?: {

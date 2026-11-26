@@ -218,6 +218,12 @@ import {
 } from "./scripting/script-contract";
 import type { ScriptRuntimeReport } from "./scripting/runtime-report";
 import {
+  describeCustomShaderCompileForMcp,
+  listCustomShaderCompileErrors,
+  resolveCustomShaderCompile,
+  type CustomShaderCompileSnapshots,
+} from "./custom-shader-compile";
+import {
   INTERACTIVITY_EASINGS,
   KHR_INTERACTIVITY_MAX_GRAPHS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
@@ -381,6 +387,8 @@ export type XriftMcpEditorContext = {
   scriptContracts?: Readonly<Record<string, ScriptContract>>;
   /** JSON-safe live diagnostics supplied by the running Script host. */
   scriptRuntime?: ScriptRuntimeReport;
+  /** What the Scene View found when it compiled each Custom Shader, by Material id. */
+  customShaderCompile?: CustomShaderCompileSnapshots;
   now?: () => string;
 };
 
@@ -705,6 +713,10 @@ function readEditorContext(
     importBusy: context.importBusy,
     saveStatus: context.saveStatus,
     scriptRuntime: context.scriptRuntime ?? null,
+    customShaderErrors: listCustomShaderCompileErrors(
+      context.bundle.assets,
+      context.customShaderCompile,
+    ),
     starterEntityIds: untouchedChatgptStarterEntityIds(context.bundle),
     sceneSettings,
     prefabs: projectPrefabSummaries(context, { pendingChanges: true }),
@@ -5910,6 +5922,7 @@ function createCustomShader(
       {
         materialAssetId: selectedMaterialId,
         shader: JSON.parse(JSON.stringify(material.shader)),
+        compile: customShaderCompileResult(context, selectedMaterialId, material.shader),
         revision: context.revision,
       },
       `Material「${material.name}」のカスタムシェーダーはすでに設定済みです`,
@@ -5927,6 +5940,7 @@ function createCustomShader(
       materialAssetId: selectedMaterialId,
       name: material.name,
       shader: JSON.parse(JSON.stringify(material.shader)),
+      compile: customShaderCompileResult(context, selectedMaterialId, material.shader),
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
@@ -5963,6 +5977,7 @@ function getCustomShader(
       materialAssetId,
       materialName: material.name,
       shader: JSON.parse(JSON.stringify(material.shader)),
+      compile: customShaderCompileResult(context, materialAssetId, material.shader),
     },
     `Material「${material.name}」のカスタムシェーダーを取得しました`,
   );
@@ -6013,6 +6028,7 @@ function updateCustomShader(
       {
         materialAssetId,
         shader: JSON.parse(JSON.stringify(shader)),
+        compile: customShaderCompileResult(context, materialAssetId, shader),
         revision: context.revision,
       },
       `Material「${material.name}」のカスタムシェーダーはすでに指定された状態です`,
@@ -6032,12 +6048,30 @@ function updateCustomShader(
       shader: updated?.shader
         ? JSON.parse(JSON.stringify(updated.shader))
         : null,
+      compile: customShaderCompileResult(context, materialAssetId, shader),
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
       synchronizedDuringPlay: context.editorMode === "play",
     },
     activity: `AIがマテリアル「${material.name}」のカスタムシェーダーを更新しました`,
   };
+}
+
+/**
+ * Whether the Scene View could compile a Custom Shader, for a tool result.
+ *
+ * A result only counts for the GLSL it was compiled from, so right after a
+ * write this reads `unknown` until the Editor has compiled the new shader and
+ * put the outcome in its place.
+ */
+function customShaderCompileResult(
+  context: XriftMcpEditorContext,
+  materialAssetId: string,
+  shader: ClassicR3fMaterialShader,
+): Record<string, unknown> {
+  return describeCustomShaderCompileForMcp(
+    resolveCustomShaderCompile(context.customShaderCompile?.[materialAssetId], shader),
+  );
 }
 
 type CoreMaterialTextureSlot =

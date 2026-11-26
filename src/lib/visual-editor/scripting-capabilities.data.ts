@@ -238,6 +238,8 @@ export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
         "ctx.materials.setTexture(slot, textureOrNull): number",
         "ctx.materials.setTextureTransform(slot, { offset?, repeat?, center?, rotation? }): number",
         "ctx.materials.resetTextureTransform(slot): number",
+        "ctx.materials.setUniform(name, value): number",
+        "ctx.materials.resetUniform(name): number",
         "ctx.materials.reset(): void",
       ],
       selection: {
@@ -271,6 +273,69 @@ export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
           "Transforms are applied to Entity-owned, Material-slot Texture clones. They never mutate the loaded source Texture, a shared Texture Asset, another Material slot, or another Entity.",
         cleanup:
           "resetTextureTransform(slot) removes that slot transform. Script restart, failure, and Stop remove every owned clone and override automatically.",
+      },
+      uniforms: {
+        purpose:
+          "Drive a Custom Shader Material's uniform while the world runs: a position fed every frame, values computed on the CPU, a fade. The value saved in the Material stays as authored.",
+        targets:
+          "Custom Shader Materials only: an authored GLSL shader (create_custom_shader) or an Open Brush preset. PBR and MToon Materials are not targeted and are left untouched. Read the uniform names and the authored value of each with get_custom_shader.",
+        availability:
+          "setUniform and resetUniform are available on ctx.materials and on handles returned by select(...).",
+        returns:
+          "The number of matched Materials that declare the uniform. 0 means no matched Material has a uniform of that name; nothing is replaced or drawn differently.",
+        values: {
+          number: "one finite number, for float, int and bool (0 or 1) uniforms",
+          vector:
+            "an array of 2, 3 or 4 finite numbers, or a three.js Vector2, Vector3 or Vector4",
+          matrix:
+            "an array of 9 or 16 finite numbers in column-major order, or a three.js Matrix3 or Matrix4",
+          array:
+            "a flat array (or typed array) of finite numbers for a GLSL array uniform; vec3 points[4] takes 12 numbers",
+          color:
+            'a CSS colour string such as "#ff6600", or a three.js Color, for a three-component uniform; a hexadecimal number such as 0xff6600 only where the Material stores a colour. They are converted the way the Material converts its own colour. Arrays and vectors are passed through unconverted.',
+          texture:
+            "a texture from ctx.assets.loadTexture or any three.js Texture, or null to clear a sampler",
+        },
+        shape:
+          "The value must have the shape of the Material's own value for that uniform: one number, the same count of numbers, or a texture. Booleans, NaN and Infinity are not accepted.",
+        errors:
+          'A value that cannot fill the uniform throws a TypeError from setUniform, so it appears in scriptRuntime.failures as ctx.materials.setUniform("name"): ... with the expected and received shape and the meshIndex / materialIndex of the Material, instead of a WebGL error at every draw. The earlier override and the drawn Material are left as they were. An uncaught throw follows the normal Script failure rules.',
+        clock:
+          "A uniform Studio drives as the animated time uniform keeps running on a Material that has other Script overrides. setUniform on that name replaces the clock while the override is on; resetUniform returns it to the running clock at its current time.",
+        composition:
+          "Overrides are composed per uniform in Script Component order; inside one Script the latest write wins between the root handle and selected handles.",
+        cost:
+          "Meant to be called every frame. A new value reuses the override's storage and does not rebuild the shader program or change its defines.",
+        isolation:
+          "The override lives on the Entity's own runtime Material. The shared Material, its value objects and other Entities using it are not changed, and the caller's array, vector or colour object is copied, not kept.",
+        cleanup:
+          "resetUniform(name) removes one override, reset() removes all of them, and Script restart, failure, and Stop remove them automatically. A texture created by the Script itself is the Script's to dispose.",
+        persistence:
+          "Runtime-only. To save a value, use update_custom_shader.",
+        example: [
+          'import { defineScript, prop } from "xrift:script";',
+          'import { Vector3 } from "three";',
+          "",
+          "export default defineScript({",
+          '  name: "Grass walker",',
+          "  props: {",
+          '    walker: prop.entity({ label: "Walker" }),',
+          '    tint: prop.color({ label: "Tint", default: "#7fbf5a" }),',
+          "  },",
+          "  start(ctx) {",
+          "    const position = new Vector3();",
+          "    return {",
+          "      update() {",
+          "        const walker = ctx.find(ctx.props.walker);",
+          "        if (!walker) return;",
+          "        walker.getWorldPosition(position);",
+          '        ctx.materials.setUniform("uWalker", position);',
+          '        ctx.materials.setUniform("uTint", ctx.props.tint);',
+          "      },",
+          "    };",
+          "  },",
+          "});",
+        ].join("\n"),
       },
       persistence:
         "Runtime-only isolated overrides. They are restored on Script restart or Stop and do not modify Material or Texture Assets.",
