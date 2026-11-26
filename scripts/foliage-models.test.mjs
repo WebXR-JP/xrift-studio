@@ -365,8 +365,9 @@ for (const { fileName, bytes, report } of built) {
     // uneven ground; the lean tilts the foot a little further down.
     const footDepth = -tubeBounds.min[1];
     assert.ok(footDepth >= 0.1 && footDepth <= 0.3, `${fileName}: trunk foot ${footDepth} m below the origin`);
-    // Low cards of the shrub hang below ground level. Nothing reaches deeper.
-    assert.ok(report.bounds.min[1] >= -0.55, `${fileName}: lowest point at ${report.bounds.min[1]}`);
+    // Low cards of the shrub hang below ground level, the larger cards of its
+    // lighter version furthest. Nothing reaches deeper.
+    assert.ok(report.bounds.min[1] >= -0.65, `${fileName}: lowest point at ${report.bounds.min[1]}`);
     // The foot of the trunk surrounds the origin.
     const foot = [];
     for (let i = 0; i < tubes.length; i += 3) if (tubes[i + 1] < 0) foot.push([tubes[i], tubes[i + 2]]);

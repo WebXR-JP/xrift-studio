@@ -75,11 +75,13 @@ import {
 } from "three";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/** Beside the pictures the foliage Material draws them with. */
 export const FOLIAGE_OUTPUT_DIRECTORY = path.join(
   repoRoot,
   "public",
   "visual-editor",
-  "recipe-assets",
+  "foliage",
+  "v1",
 );
 
 // ---------------------------------------------------------------------------
@@ -192,13 +194,17 @@ const GARDEN_TREE = {
   core: 0,
 };
 
-/** A shrub: many stems rising from the foot into a dense mound. */
+/**
+ * A shrub: many stems rising from the foot into a dense mound. The stems stand
+ * fairly upright and branch from low down, so that twigs cross the middle: a
+ * shrub is looked at from above, and stems that lean far out leave a hole.
+ */
 const SHRUB = {
   seed: 31,
   trunk: { height: 0.12, radius: 0.06, lean: 0.05, wobble: 0.02, flare: 1.2, segments: 2 },
-  split: { count: 7, spread: 1.0, length: 1.5, up: 0.3, curl: 0.2, radius: 0.7 },
+  split: { count: 9, spread: 0.72, length: 1.35, up: 0.1, curl: 0.2, radius: 0.7 },
   levels: [
-    { count: 5, angle: 0.9, length: 0.6, start: 0.2, up: 0.12, curl: 0.25, radius: 0.6 },
+    { count: 5, angle: 0.95, length: 0.7, start: 0.15, up: 0.1, curl: 0.25, radius: 0.6 },
   ],
   leaves: { size: 0.45, perTwig: 6, along: 0.85, tilt: 0.6, droop: 0.05 },
   radial: [5, 4, 3],
@@ -1260,7 +1266,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (problems.length) {
       console.error(
         [
-          "Foliage models in public/visual-editor/recipe-assets are out of date:",
+          "Foliage models in public/visual-editor/foliage/v1 are out of date:",
           ...problems.map((problem) => `  ${problem}`),
           "Run: node scripts/generate-foliage-models.mjs",
         ].join("\n"),
