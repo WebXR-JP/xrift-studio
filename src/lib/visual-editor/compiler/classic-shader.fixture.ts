@@ -28,7 +28,18 @@ import {
 } from "../asset-manifest";
 import { BUILTIN_PRIMITIVE_CREATION_IDS } from "../creation-catalog";
 import type { ClassicR3fMaterialShader } from "../custom-shader-contract";
-import { BUILTIN_ASSET_IDS, createPrototypeProject } from "../prototype-project";
+import {
+  LIGHTING_CONTRACT_GLSL_UNIFORMS,
+  resolveSceneLighting,
+} from "../lighting-contract";
+import {
+  BUILTIN_ASSET_IDS,
+  createPrototypeProject,
+  type PrototypeVisualProject,
+} from "../prototype-project";
+import { createVegetationWindComponent } from "../scene-document";
+import { resolveSceneSettings } from "../scene-settings";
+import { WIND_CONTRACT_GLSL_UNIFORMS, resolveSceneWind } from "../wind-contract";
 import { compileVisualProject } from "./compile";
 import type { VisualCompileResult } from "./types";
 
@@ -173,7 +184,9 @@ function compileShaderWorld(
   mode: "primitive" | "model",
   outputMode: "classic-jsx" | "classic-runtime" = "classic-jsx",
   textures: readonly TextureAsset[] = fixtureTextureAssets(),
-): { result: VisualCompileResult; material: MaterialAsset } {
+  /** Changes the Scene before it is compiled: its settings, lights, Wind. */
+  arrange: (project: PrototypeVisualProject) => void = () => {},
+): { result: VisualCompileResult; material: MaterialAsset; project: PrototypeVisualProject } {
   const prototype = createPrototypeProject("world", `fixture-classic-shader-${mode}`);
   const source = prototype.assets.assets[BUILTIN_ASSET_IDS.material.violet] as MaterialAsset;
   const material: MaterialAsset = {
@@ -204,6 +217,7 @@ function compileShaderWorld(
   prototype.assets.assets[material.id] = material;
   for (const texture of textures) prototype.assets.assets[texture.id] = texture;
   if (mode === "model") prototype.assets.assets[model.id] = model;
+  arrange(prototype);
   const result = compileVisualProject(
     {
       project: prototype.project,
@@ -213,7 +227,7 @@ function compileShaderWorld(
     },
     { generatedAt: "2026-11-26T00:00:00.000Z", outputMode },
   );
-  return { result, material };
+  return { result, material, project: prototype };
 }
 
 function worldSource(result: VisualCompileResult): string {
@@ -385,6 +399,7 @@ export function runClassicShaderCompilerFixtureAssertions(
 
   assertEditorAndWorldBuildTheSameMaterial(shader, emitted);
   assertUnreadableTexturesStopPublication();
+  assertSceneValuesReachEveryOutput(mode);
   return result;
 }
 
@@ -419,6 +434,169 @@ function assertEditorAndWorldBuildTheSameMaterial(
     editor.dispose();
     world.dispose();
   }
+}
+
+/** A shader that reads the Scene's wind and key light, as foliage does. */
+function sceneDrivenShader(): ClassicR3fMaterialShader {
+  return {
+    kind: "classic-r3f",
+    sourceModulePath: "fixture://scene-driven",
+    vertexShader: `uniform float uTime;
+${WIND_CONTRACT_GLSL_UNIFORMS}
+void main() {
+  vec3 swayed = position;
+  swayed.xz += uWindDirection * uWindSpeed * (1.0 + uWindTurbulence) * sin(uTime) * 0.01;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(swayed, 1.0);
+}`,
+    fragmentShader: `${LIGHTING_CONTRACT_GLSL_UNIFORMS}
+uniform float uGain;
+void main() {
+  vec3 light = uSunColor * uSunIntensity * max(uSunDirection.y, 0.0) + uAmbientColor * uAmbientIntensity;
+  gl_FragColor = vec4(light * uGain, 1.0);
+}`,
+    uniforms: {
+      uTime: { kind: "number", value: 0 },
+      // What an author left in the Material. None of it is the Scene's value.
+      uWindDirection: { kind: "vector", value: [0, -1] },
+      uWindSpeed: { kind: "number", value: 9 },
+      uWindTurbulence: { kind: "number", value: 0.9 },
+      uSunDirection: { kind: "vector", value: [1, 0, 0] },
+      uSunColor: { kind: "vector", value: [0.1, 0.2, 0.3] },
+      uSunIntensity: { kind: "number", value: 9 },
+      uAmbientColor: { kind: "vector", value: [0.3, 0.2, 0.1] },
+      uAmbientIntensity: { kind: "number", value: 9 },
+      // The Material's own: the Scene does not drive it.
+      uGain: { kind: "number", value: 0.5 },
+    },
+    variants: [
+      { name: "leaves", meshNameIncludes: "Lamp", defines: { LEAVES: "1" }, side: "double", transparent: false, depthWrite: true },
+      { name: "default", defines: {}, side: "front", transparent: false, depthWrite: true },
+    ],
+  };
+}
+
+/**
+ * Wind and the key light belong to the Scene. The generated world and the
+ * Runtime JSON manifest must both carry the Scene's values for them, and the
+ * same ones: the Runtime JSON loader reads nothing else.
+ */
+function assertSceneValuesReachEveryOutput(mode: "primitive" | "model"): void {
+  const shader = sceneDrivenShader();
+  const arrangeScene = (project: PrototypeVisualProject) => {
+    const settings = resolveSceneSettings(project.scene.settings);
+    project.scene.settings = {
+      ...settings,
+      vegetation: { ...settings.vegetation, enabled: true, windSpeed: 1.75, gustStrength: 0.25, windDirectionDegrees: 120 },
+      ambient: { enabled: true, color: "#336699", intensity: 0.75 },
+    };
+  };
+  for (const entityWind of [false, true]) {
+    const arrange = (project: PrototypeVisualProject) => {
+      arrangeScene(project);
+      if (!entityWind) return;
+      // The first Entity that wears the Material narrows the wind for it.
+      const wearer = project.scene.entities[project.scene.rootEntityIds[0]!]!;
+      const wind = createVegetationWindComponent("fixture-entity-wind", {
+        windSpeed: 3.5,
+        gustStrength: 0.5,
+      });
+      assert(wind, "the fixture Wind component must be created");
+      wearer.components.push(wind);
+    };
+    const jsx = compileShaderWorld(shader, mode, "classic-jsx", [], arrange);
+    const runtime = compileShaderWorld(shader, mode, "classic-runtime", [], arrange);
+    assert(
+      jsx.result.canStage && runtime.result.canStage && runtime.result.runtimeManifestFile,
+      `a shader that reads the Scene must compile both ways: ${JSON.stringify([...jsx.result.diagnostics, ...runtime.result.diagnostics].filter((entry) => entry.severity === "blocking"))}`,
+    );
+    const world = emittedShader(worldSource(jsx.result));
+    const manifest = (
+      JSON.parse(runtime.result.runtimeManifestFile.content) as {
+        assets: Record<string, { shader?: ClassicR3fMaterialShader }>;
+      }
+    ).assets[runtime.material.id]?.shader;
+    assert(manifest, "the Runtime JSON manifest must carry the shader");
+
+    // What the Scene says, resolved the way the Scene View resolves it.
+    const scene = jsx.project.scene;
+    const settings = resolveSceneSettings(scene.settings);
+    const wind = resolveSceneWind(
+      settings.vegetation,
+      entityWind ? { enabled: true, windSpeed: 3.5, gustStrength: 0.5 } : undefined,
+    );
+    const lighting = resolveSceneLighting(scene, settings.ambient);
+    const expected: Record<string, unknown> = {
+      uWindDirection: { kind: "vector", value: wind.direction },
+      uWindSpeed: { kind: "number", value: wind.speed },
+      uWindTurbulence: { kind: "number", value: wind.turbulence },
+      uSunDirection: { kind: "vector", value: lighting.sunDirection },
+      uSunColor: { kind: "vector", value: lighting.sunColor },
+      uSunIntensity: { kind: "number", value: lighting.sunIntensity },
+      uAmbientColor: { kind: "vector", value: lighting.ambientColor },
+      uAmbientIntensity: { kind: "number", value: lighting.ambientIntensity },
+      uGain: { kind: "number", value: 0.5 },
+      uTime: { kind: "number", value: 0 },
+    };
+    assert(
+      wind.speed === (entityWind ? 3.5 : 1.75) &&
+        lighting.sunIntensity === 2.4 &&
+        lighting.ambientIntensity === 0.75,
+      "the fixture Scene must hold the wind, the sun and the ambient it was given",
+    );
+    const label = entityWind ? "with a Wind component on the Entity" : "with the Scene's wind";
+    for (const [name, value] of Object.entries(expected)) {
+      const authored = JSON.stringify(shader.uniforms[name]);
+      const want = JSON.stringify(value);
+      assert(
+        name === "uGain" || name === "uTime" || authored !== want,
+        `${name} of the fixture must differ from the Scene's value, or the check proves nothing`,
+      );
+      assert(
+        stableJson(world.uniforms[name]) === stableJson(value),
+        `the generated world must carry the Scene's ${name} ${label}: ${JSON.stringify(world.uniforms[name])}, expected ${want}`,
+      );
+      assert(
+        stableJson(manifest.uniforms[name]) === stableJson(value),
+        `the Runtime JSON manifest must carry the Scene's ${name} ${label}, as the generated world does: ${JSON.stringify(manifest.uniforms[name])}, expected ${want}`,
+      );
+    }
+    // The whole descriptor, not only the uniforms the Scene drives.
+    assert(
+      stableJson(manifest) === stableJson(world),
+      `the Runtime JSON manifest and the generated world must publish one descriptor ${label}`,
+    );
+
+    // And the loader's builder turns that data into the same Material.
+    for (const meshName of ["", "Street_Lamp_02"]) {
+      const fromWorld = createClassicShaderMaterial(world, { meshName });
+      const fromManifest = createClassicShaderMaterial(manifest, { meshName });
+      assert(
+        drawnState(fromWorld) === drawnState(fromManifest),
+        `both outputs must build the same Material for a mesh named "${meshName}" ${label}`,
+      );
+      assert(
+        (fromManifest.uniforms.uWindSpeed?.value as number) === wind.speed &&
+          JSON.stringify((fromManifest.uniforms.uSunDirection?.value as { toArray(): number[] }).toArray()) ===
+            JSON.stringify(lighting.sunDirection),
+        "the Material built from the manifest must hold the Scene's wind and sun",
+      );
+      fromWorld.dispose();
+      fromManifest.dispose();
+    }
+  }
+}
+
+/** JSON with sorted keys, so two outputs written in different orders compare. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.entries(entry as Record<string, unknown>).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        )
+      : entry,
+  );
 }
 
 function assertUnreadableTexturesStopPublication(): void {

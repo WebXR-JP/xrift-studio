@@ -6,6 +6,7 @@ import {
   type AssetManifest,
   type SceneAsset,
 } from "../asset-manifest";
+import type { ClassicR3fMaterialShader } from "../custom-shader-contract";
 import type { MeshComponent, SceneDocument, SceneEntity } from "../scene-document";
 import { resolveSceneSettings } from "../scene-settings";
 import type {
@@ -31,6 +32,7 @@ import { collectModelInstancingEntities } from "../model-instancing";
 import { isPublishedAsKtx2 } from "../texture-conversion";
 import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 import { isXriftExtrudeProfile } from "../../../../packages/xrift-studio-runtime/src/extrude-profile";
+import { publishedSceneClassicShader } from "./classic-shader-publish";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -40,8 +42,18 @@ export function compileRuntimeManifest(
   diagnostics: CompilerDiagnostic[],
   decoders?: XriftRuntimeDecoderPaths,
   textFontDirectoryUrl?: string,
+  /**
+   * The descriptor the generated world publishes each Custom Shader Material
+   * with, by Material Asset id, so the two outputs carry the same values.
+   */
+  publishedClassicShaders: ReadonlyMap<string, ClassicR3fMaterialShader> = new Map(),
 ): XriftRuntimeManifest {
-  const runtimeAssets = compileRuntimeAssets(documents.assets, assetCopyPlan);
+  const runtimeAssets = compileRuntimeAssets(
+    documents.assets,
+    assetCopyPlan,
+    entryScene,
+    publishedClassicShaders,
+  );
   const scenes = entryScene
     ? {
         [entryScene.sceneId]: compileRuntimeScene(
@@ -486,6 +498,8 @@ function resolveRuntimeGeometry(
 function compileRuntimeAssets(
   assets: AssetManifest,
   assetCopyPlan: readonly AssetCopyPlanEntry[],
+  entryScene: SceneDocument | null,
+  publishedClassicShaders: ReadonlyMap<string, ClassicR3fMaterialShader>,
 ): Record<string, XriftRuntimeAsset> {
   const runtimeUrlByAssetId = new Map(
     assetCopyPlan.map((entry) => [
@@ -499,15 +513,47 @@ function compileRuntimeAssets(
   for (const asset of Object.values(assets.assets).sort((left, right) =>
     left.id.localeCompare(right.id),
   )) {
-    const compiled = compileRuntimeAsset(asset, runtimeUrlByAssetId.get(asset.id));
+    const compiled = compileRuntimeAsset(
+      asset,
+      runtimeUrlByAssetId.get(asset.id),
+      entryScene,
+      publishedClassicShaders,
+    );
     if (compiled) entries.push([asset.id, compiled]);
   }
   return Object.fromEntries(entries);
 }
 
+/**
+ * The shader a Material is published with.
+ *
+ * The Runtime JSON loader builds a Custom Shader Material from this data alone:
+ * it does not read the Scene's wind or lights. So the uniforms the Scene drives
+ * are written here with the Scene's values, by the function the generated
+ * world uses, and a world published either way draws the same.
+ */
+function compileRuntimeMaterialShader(
+  asset: Extract<SceneAsset, { kind: "material" }>,
+  entryScene: SceneDocument | null,
+  publishedClassicShaders: ReadonlyMap<string, ClassicR3fMaterialShader>,
+): Extract<XriftRuntimeAsset, { kind: "material" }>["shader"] {
+  const shader = asset.shader;
+  // The clone keeps the manifest free of any object the authoring document
+  // still holds.
+  if (shader?.kind !== "classic-r3f") return JSON.parse(JSON.stringify(shader));
+  // The descriptor the generated world emits for the Entity that wears the
+  // Material. One that no mesh wears follows the Scene alone.
+  const published =
+    publishedClassicShaders.get(asset.id) ??
+    (entryScene ? publishedSceneClassicShader(shader, entryScene) : shader);
+  return JSON.parse(JSON.stringify(published));
+}
+
 function compileRuntimeAsset(
   asset: SceneAsset,
   url: string | undefined,
+  entryScene: SceneDocument | null,
+  publishedClassicShaders: ReadonlyMap<string, ClassicR3fMaterialShader>,
 ): XriftRuntimeAsset | null {
   if (asset.kind === "model" && url) {
     const openBrush = asset.importMetadata?.openBrush;
@@ -593,7 +639,13 @@ function compileRuntimeAsset(
       name: asset.name,
       properties: JSON.parse(JSON.stringify(asset.properties)),
       ...(asset.shader
-        ? { shader: JSON.parse(JSON.stringify(asset.shader)) }
+        ? {
+            shader: compileRuntimeMaterialShader(
+              asset,
+              entryScene,
+              publishedClassicShaders,
+            ),
+          }
         : {}),
     };
   }
