@@ -1,6 +1,6 @@
 {
-  "version": "a779c060134c",
-  "runtimeContract": "2026-11-26-custom-shader-material-v1",
+  "version": "9aee3e6e5ba5",
+  "runtimeContract": "2026-11-26-custom-shader-mipmaps-v1",
   "cliVersion": "0.26.0",
   "worldComponentsVersion": "0.64.0",
   "entry": "remoteEntry.js",
@@ -12,8 +12,8 @@
     "BufferGeometryUtils-Lm-Ub1P1.js",
     "GLTFLoader-DyTzLnQI.js",
     "Reflector-DOOLmtJT.js",
-    "__federation_expose_Item-CPvCM0mz.js",
-    "__federation_expose_World-COObxSw0.js",
+    "__federation_expose_Item-Ztw47OgU.js",
+    "__federation_expose_World-Bn1GRN51.js",
     "__federation_fn_import-KOOfp08f.js",
     "__federation_shared_three/addons/loaders/DRACOLoader.js-Ct_OpDe7.js",
     "__federation_shared_three/addons/loaders/KTX2Loader.js-Cs5IY5h1.js",
@@ -25,7 +25,7 @@
     "draco_decoder-fzg4nYZr.js",
     "draco_wasm_wrapper-DxJM36Ib.js",
     "draco_wasm_wrapper-fZCQGLGb.js",
-    "index-BrS1XS6n.js",
+    "index-BZAHUjOB.js",
     "index-C2f4FEBb.js",
     "index-CZFAL8r8.js",
     "index-CxGO-1df.js",
@@ -33,7 +33,7 @@
     "index-D3ouKBRF.js",
     "index-DB1oHa3H.js",
     "index-DFK1Z5k2.js",
-    "index-gNjXIut-.js",
+    "index-Dke3OMRi.js",
     "inter-CWDahd6k.js",
     "jsx-runtime-BAg69Pif.js",
     "jsx-runtime-BuyO1Nk4.js",
@@ -59,13 +59,13 @@
     "Reflector-DOOLmtJT.js": [
       "__federation_fn_import-KOOfp08f.js"
     ],
-    "__federation_expose_Item-CPvCM0mz.js": [
+    "__federation_expose_Item-Ztw47OgU.js": [
       "__federation_fn_import-KOOfp08f.js",
-      "index-BrS1XS6n.js"
+      "index-BZAHUjOB.js"
     ],
-    "__federation_expose_World-COObxSw0.js": [
+    "__federation_expose_World-Bn1GRN51.js": [
       "__federation_fn_import-KOOfp08f.js",
-      "index-BrS1XS6n.js"
+      "index-BZAHUjOB.js"
     ],
     "__federation_fn_import-KOOfp08f.js": [],
     "__federation_shared_three/addons/loaders/DRACOLoader.js-Ct_OpDe7.js": [
@@ -79,7 +79,7 @@
     "draco_decoder-fzg4nYZr.js": [],
     "draco_wasm_wrapper-DxJM36Ib.js": [],
     "draco_wasm_wrapper-fZCQGLGb.js": [],
-    "index-BrS1XS6n.js": [
+    "index-BZAHUjOB.js": [
       "GLTFLoader-DyTzLnQI.js",
       "Reflector-DOOLmtJT.js",
       "__federation_fn_import-KOOfp08f.js",
@@ -107,8 +107,8 @@
     ],
     "index-DB1oHa3H.js": [],
     "index-DFK1Z5k2.js": [],
-    "index-gNjXIut-.js": [
-      "__federation_expose_World-COObxSw0.js",
+    "index-Dke3OMRi.js": [
+      "__federation_expose_World-Bn1GRN51.js",
       "__federation_fn_import-KOOfp08f.js"
     ],
     "inter-CWDahd6k.js": [],

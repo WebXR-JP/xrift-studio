@@ -16965,8 +16965,7 @@ const CLASSIC_SHADER_LIMITS = {
      * come out black on another.
      */
     volumeAxis: 256,
-    cubeFaces: 6,
-};
+    cubeFaces: 6};
 /** The variant a mesh wears: its own name first, then the fallback. */
 function resolveClassicShaderVariant(shader, meshName = "") {
     const normalizedMeshName = meshName.toLocaleLowerCase();
@@ -17020,7 +17019,7 @@ function resolveClassicShaderTimeUniforms(shader) {
     return specs;
 }
 
-const {AdditiveBlending: AdditiveBlending$2,BackSide: BackSide$3,ClampToEdgeWrapping: ClampToEdgeWrapping$2,Color: Color$5,CubeTexture,Data3DTexture,DoubleSide: DoubleSide$2,FloatType: FloatType$1,FrontSide: FrontSide$1,HalfFloatType: HalfFloatType$1,LinearFilter: LinearFilter$1,Matrix3: Matrix3$1,Matrix4: Matrix4$1,MultiplyBlending: MultiplyBlending$1,NearestFilter,NoColorSpace: NoColorSpace$2,NormalBlending: NormalBlending$2,RGBAFormat,RepeatWrapping: RepeatWrapping$1,SRGBColorSpace: SRGBColorSpace$4,ShaderMaterial: ShaderMaterial$2,SubtractiveBlending: SubtractiveBlending$1,UVMapping,UniformsLib,UniformsUtils,UnsignedByteType,Vector2: Vector2$2,Vector3: Vector3$2,Vector4: Vector4$1} = await importShared('three');
+const {AdditiveBlending: AdditiveBlending$2,BackSide: BackSide$3,ClampToEdgeWrapping: ClampToEdgeWrapping$2,Color: Color$5,CubeTexture,Data3DTexture,DoubleSide: DoubleSide$2,FloatType: FloatType$1,FrontSide: FrontSide$1,HalfFloatType: HalfFloatType$1,LinearFilter: LinearFilter$1,LinearMipmapLinearFilter,Matrix3: Matrix3$1,Matrix4: Matrix4$1,MultiplyBlending: MultiplyBlending$1,NearestFilter,NearestMipmapLinearFilter,NoColorSpace: NoColorSpace$2,NormalBlending: NormalBlending$2,RGBAFormat,RepeatWrapping: RepeatWrapping$1,SRGBColorSpace: SRGBColorSpace$4,ShaderMaterial: ShaderMaterial$2,SubtractiveBlending: SubtractiveBlending$1,UVMapping,UniformsLib,UniformsUtils,UnsignedByteType,Vector2: Vector2$2,Vector3: Vector3$2,Vector4: Vector4$1} = await importShared('three');
 const CLASSIC_SHADER_BLENDING = {
     normal: NormalBlending$2,
     additive: AdditiveBlending$2,
@@ -17185,9 +17184,30 @@ function isDataTexture(texture) {
 function isFloatTexture(texture) {
     return texture.type === HalfFloatType$1 || texture.type === FloatType$1;
 }
+/**
+ * Sets how a `texture` or `texture-cube` uniform is filtered.
+ *
+ * `mipmapped` says the texture has mip levels to read. `filter` then still
+ * picks the texels inside one level, and the two closest levels are blended,
+ * so a surface shows no line where the level changes. Without mip levels the
+ * full-size picture alone is sampled, as it always was.
+ *
+ * three.js applies `anisotropy` only on this pairing: mip levels blended and a
+ * linear `filter`. Anywhere else the number is ignored by the renderer.
+ */
+function applySamplerFilters(texture, uniform, mipmapped) {
+    const nearest = uniform.filter === "nearest";
+    texture.magFilter = nearest ? NearestFilter : LinearFilter$1;
+    texture.minFilter = !mipmapped
+        ? texture.magFilter
+        : nearest
+            ? NearestMipmapLinearFilter
+            : LinearMipmapLinearFilter;
+    // Written even when omitted: the Asset's own sampler must not leak in.
+    texture.anisotropy = uniform.anisotropy ?? 1;
+}
 function createUniformTexture(name, uniform, options) {
     const report = (diagnostic) => options.onDiagnostic?.({ ...diagnostic, uniformName: name });
-    const filter = uniform.filter === "nearest" ? NearestFilter : LinearFilter$1;
     if (uniform.kind === "texture") {
         const source = lookupTexture(options.textures, uniform.textureAssetId);
         if (!source) {
@@ -17201,15 +17221,19 @@ function createUniformTexture(name, uniform, options) {
         const texture = source.clone();
         const compressed = isCompressedTexture(texture);
         const data = isDataTexture(texture);
+        const float = isFloatTexture(texture);
         // Float data is numbers, not colour: it has no sRGB encoding to undo.
         texture.colorSpace =
-            uniform.colorSpace === "srgb" && !isFloatTexture(texture)
-                ? SRGBColorSpace$4
-                : NoColorSpace$2;
-        // Compressed textures carry encoded mip levels; WebGL cannot generate them.
-        texture.generateMipmaps = !compressed && (uniform.generateMipmaps ?? false);
-        texture.magFilter = filter;
-        texture.minFilter = filter;
+            uniform.colorSpace === "srgb" && !float ? SRGBColorSpace$4 : NoColorSpace$2;
+        // Where the mip levels come from. A decoded picture has them built when it
+        // is uploaded. A compressed texture carries the levels its file was encoded
+        // with, and WebGL cannot build more. Float data gets none: WebGL builds
+        // them only with optional extensions, and a sampler that asks for levels
+        // the device could not build reads black.
+        const mipmaps = uniform.generateMipmaps === true;
+        texture.generateMipmaps = mipmaps && !compressed && !float;
+        applySamplerFilters(texture, uniform, texture.generateMipmaps ||
+            (mipmaps && compressed && texture.mipmaps.length > 1));
         texture.wrapS = wrapping(uniform.wrapS, "repeat");
         texture.wrapT = wrapping(uniform.wrapT, "repeat");
         // The orientation three.js loaders hand a ShaderMaterial: a decoded picture
@@ -17247,9 +17271,9 @@ function createUniformTexture(name, uniform, options) {
         const texture = volume.clone();
         texture.colorSpace =
             uniform.colorSpace === "srgb" ? SRGBColorSpace$4 : NoColorSpace$2;
+        // A volume is a table: it is read at full size, without mip levels.
         texture.generateMipmaps = false;
-        texture.magFilter = filter;
-        texture.minFilter = filter;
+        applySamplerFilters(texture, { filter: uniform.filter }, false);
         texture.wrapS = wrapping(uniform.wrapS, "clamp-to-edge");
         texture.wrapT = wrapping(uniform.wrapT, "clamp-to-edge");
         texture.wrapR = wrapping(uniform.wrapR, "clamp-to-edge");
@@ -17284,9 +17308,9 @@ function createUniformTexture(name, uniform, options) {
     const texture = cube.clone();
     texture.colorSpace =
         uniform.colorSpace === "srgb" ? SRGBColorSpace$4 : NoColorSpace$2;
-    texture.generateMipmaps = uniform.generateMipmaps ?? false;
-    texture.magFilter = filter;
-    texture.minFilter = filter;
+    // The faces are decoded pictures, so their mip levels can always be built.
+    texture.generateMipmaps = uniform.generateMipmaps === true;
+    applySamplerFilters(texture, uniform, texture.generateMipmaps);
     texture.needsUpdate = true;
     return texture;
 }
