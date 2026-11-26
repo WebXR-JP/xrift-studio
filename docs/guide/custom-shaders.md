@@ -31,6 +31,19 @@ Inspectorの「シェーダーの調整値」には、シェーダーが持つun
 
 `sampler2D`のテクスチャにはEXRも選べます。EXRは浮動小数のまま渡るため、1を超える値や、位置などの数値を読めます。精度はファイルに合わせ、16bitか32bitになります。32bitの値をなめらかに補間できない端末があります。数値の表として読むEXRは16bitで保存するか、`update_custom_shader`で`filter`を`nearest`にしてください。HDR（.hdr）は選べません。
 
+## 遠くの面のちらつきを抑える
+
+`sampler2D`とキューブマップのテクスチャは、初期状態では元の大きさの画像だけを読みます。遠くの面や、細かく繰り返す模様がちらつく場合は、AIクライアントの`update_custom_shader`で、そのuniformの`generateMipmaps`を`true`にしてください。画像を小さく描く場所で、Mipmaps（縮小表示用の画像）を読むようになります。テクスチャのInspectorにあるMipmapsは標準のマテリアルで使う設定です。カスタムシェーダーではuniformごとに指定します。
+
+| `filter` | 拡大したとき | 縮小したとき（`generateMipmaps`が`true`） |
+|---|---|---|
+| `linear`（初期値） | なめらかに補間します | 縮小表示用の画像を、補間して読みます |
+| `nearest` | 画素をくっきり見せます | 縮小表示用の画像から、最も近い画素を読みます |
+
+地面や壁のように斜めから見る面は、`anisotropy`を2〜16にすると、奥までぼやけずに描けます。`anisotropy`を2以上にできるのは、`generateMipmaps`が`true`で、`filter`が`linear`のuniformです。端末が対応する値までが使われます。
+
+Mipmapsは、PNGやJPEGなどの8bitの画像では読み込むときに作られます。KTX2へ圧縮したテクスチャでは、ファイルに含まれるMipmapsを使います。含まれない場合は、元の大きさの画像だけを読みます。EXRにはMipmapsを作りません。3Dテクスチャには`generateMipmaps`と`anisotropy`を指定できません。
+
 ## 合成とカリングを設定する
 
 Inspectorの「合成とカリング」では、バリアントごとに描き方を選べます。バリアントは、Meshの名前に応じて切り替える設定の組です。
@@ -63,6 +76,23 @@ void main() {
 ```
 
 値はGLBから読み込みます。外部のファイルを参照する`.gltf`は取り込み時にGLBへ変換されるため、インスタンスごとの独自属性は残りません。必要なデータを含むGLBを取り込んでください。
+
+## シーンの風とライトを読む
+
+シェーダーが次の名前のuniformを持つと、マテリアルに保存した値の代わりに、シーンの値が渡されます。風はシーン設定の風、光はシーンでいちばん強いDirectional Lightと、シーン設定のAmbient Lightです。葉を風で揺らす、幹をシーンの光で照らす、といった表現に使えます。
+
+| uniform名 | GLSLの型 | 渡される値 |
+|---|---|---|
+| `uWindDirection` | `vec2` | 風が吹いていく向き。水平の、長さ1のベクトルです |
+| `uWindSpeed` | `float` | 風の速度。風を無効にすると0になります |
+| `uWindTurbulence` | `float` | 突風の強さ。0〜1です |
+| `uSunDirection` | `vec3` | 面から光源へ向かう向き。長さ1のベクトルです |
+| `uSunColor` | `vec3` | 光の色 |
+| `uSunIntensity` | `float` | 光の強さ。Directional Lightがなければ0になります |
+| `uAmbientColor` | `vec3` | Ambient Lightの色 |
+| `uAmbientIntensity` | `float` | Ambient Lightの強さ。無効にすると0になります |
+
+Scene ViewとPlay、公開したワールドで、同じ値が使われます。割り当て先がプリミティブ、Terrain、モデルのどれでも同じです。シーンの風やライトを変えると、Scene Viewの表示も変わります。Inspectorのマテリアルのプレビューには、保存した値が使われます。
 
 ## 動作中に値を変える
 

@@ -2801,6 +2801,62 @@ export function runXriftMcpEditorToolFixtures(): void {
       `a ${label} uniform naming a missing Texture must be refused before it is saved: ${JSON.stringify(rejected)}`,
     );
   }
+  // The sampler options of a texture uniform: mip levels and anisotropy.
+  const rejectedAnisotropy = customShaderCode({
+    uniforms: { uMap: { kind: "texture", textureAssetId: texture.id, anisotropy: 8 } },
+  });
+  assert(
+    rejectedAnisotropy?.code === "CUSTOM_SHADER_INVALID" &&
+      rejectedAnisotropy.details.includes("uniforms.uMap") &&
+      rejectedAnisotropy.details.includes("generateMipmaps"),
+    `an anisotropy the renderer would ignore must be refused, naming what it needs: ${JSON.stringify(rejectedAnisotropy)}`,
+  );
+  const rejectedAnisotropyRange = customShaderCode({
+    uniforms: { uMap: { kind: "texture", textureAssetId: texture.id, generateMipmaps: true, anisotropy: 32 } },
+  });
+  assert(
+    rejectedAnisotropyRange?.code === "CUSTOM_SHADER_INVALID" &&
+      rejectedAnisotropyRange.details.includes("uniforms.uMap"),
+    `an anisotropy over 16 must be refused with its uniform named: ${JSON.stringify(rejectedAnisotropyRange)}`,
+  );
+  const sampledUniforms = {
+    ...customShaderFields.uniforms,
+    uMap: { kind: "texture", textureAssetId: texture.id, generateMipmaps: true, anisotropy: 8 },
+  };
+  const customShaderSampled = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-custom-shader-sampler",
+    tool: "update_custom_shader",
+    arguments: customShaderArguments({ uniforms: sampledUniforms }),
+  });
+  current = {
+    ...current,
+    bundle: customShaderSampled.bundle,
+    revision: current.revision + 1,
+  };
+  assert(
+    customShaderSampled.changed &&
+      JSON.stringify(
+        (
+          executeXriftMcpEditorTool(current, {
+            id: "fixture-get-custom-shader-sampler",
+            tool: "get_custom_shader",
+            arguments: { materialAssetId: customShaderAssetId },
+          }).result.shader as { uniforms: unknown }
+        ).uniforms,
+      ) === JSON.stringify(sampledUniforms),
+    "update_custom_shader must store generateMipmaps and anisotropy on a texture uniform, and get_custom_shader must return them",
+  );
+  // Back to the uniforms the rest of this fixture was written against.
+  const customShaderUnsampled = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-custom-shader-sampler-undo",
+    tool: "update_custom_shader",
+    arguments: customShaderArguments({ uniforms: customShaderFields.uniforms }),
+  });
+  current = {
+    ...current,
+    bundle: customShaderUnsampled.bundle,
+    revision: current.revision + 1,
+  };
   const customShaderWithFields = executeXriftMcpEditorTool(current, {
     id: "fixture-create-custom-shader-fields",
     tool: "create_custom_shader",
