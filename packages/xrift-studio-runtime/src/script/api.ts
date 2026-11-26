@@ -10,7 +10,19 @@
  */
 
 import type { ReactNode } from "react";
-import type { Camera, Object3D, Scene, WebGLRenderer } from "three";
+import type {
+  Camera,
+  Color,
+  Matrix3,
+  Matrix4,
+  Object3D,
+  Scene,
+  Texture,
+  Vector2,
+  Vector3,
+  Vector4,
+  WebGLRenderer,
+} from "three";
 
 export type ScriptVec2 = [number, number];
 export type ScriptVec3 = [number, number, number];
@@ -363,6 +375,30 @@ export type ScriptMaterialSelector = {
   materialIndex?: number;
 };
 
+/**
+ * A value for one uniform of a custom shader Material.
+ *
+ * The value has to have the shape of the Material's own value for that
+ * uniform: one number, the same count of numbers, or a texture. A colour
+ * written as a string or a three.js `Color` fills a three-component uniform;
+ * a hexadecimal number is read as a colour only where the Material holds a
+ * `Color`. Arrays and vectors are passed through as they are, without colour
+ * conversion. A GLSL `bool` takes 0 or 1.
+ */
+export type ScriptMaterialUniformValue =
+  | number
+  | string
+  | ArrayLike<number>
+  | Vector2
+  | Vector3
+  | Vector4
+  | Matrix3
+  | Matrix4
+  | Color
+  | Texture
+  | ScriptTexture
+  | null;
+
 export type ScriptMaterialHandle = {
   /** Number of Material slots currently matched by this handle. */
   count(): number;
@@ -385,6 +421,26 @@ export type ScriptMaterialHandle = {
   ): number;
   /** Removes this handle's transform override for one texture slot. */
   resetTextureTransform(slot: ScriptMaterialTextureSlot): number;
+  /**
+   * Overrides one uniform of the matched custom shader Materials by name and
+   * returns how many of them have that uniform. Materials without it, and
+   * Materials that are not custom shaders, are left as they are.
+   *
+   * The override stays on this Entity's own runtime Material until
+   * `resetUniform`, `reset`, a restart or Stop, and it is meant to be called
+   * every frame: a new value changes neither the shader program nor the
+   * shared Material. While it is on, it also replaces the clock Studio feeds
+   * to an animated time uniform of the same name.
+   *
+   * Throws a `TypeError` when the value cannot fill the uniform, so the
+   * mistake reaches the Script Console instead of the renderer.
+   */
+  setUniform(name: string, value: ScriptMaterialUniformValue): number;
+  /**
+   * Removes this handle's override for one uniform, back to the Material's
+   * own value, and returns how many matched Materials have that uniform.
+   */
+  resetUniform(name: string): number;
   /** Removes this handle's overrides while preserving other Script owners. */
   reset(): void;
 };

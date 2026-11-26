@@ -24,8 +24,10 @@ import {
   NearestFilter,
   NearestMipmapLinearFilter,
   NearestMipmapNearestFilter,
+  RawShaderMaterial,
   RepeatWrapping,
   SRGBColorSpace,
+  ShaderMaterial,
   Texture,
   TextureLoader,
   type Material,
@@ -776,11 +778,30 @@ type MaterialOverrideRevisions = {
   textureTransforms: MaterialTextureTransformRevisions;
 };
 
+/**
+ * One uniform value written by a Script.
+ *
+ * Held as plain numbers rather than as the caller's object: the value then
+ * survives whatever the Script does with that object afterwards, and a setter
+ * that runs every frame writes into the same storage instead of allocating.
+ */
+type MaterialUniformOverride = {
+  kind: "number" | "numbers" | "texture";
+  number: number;
+  numbers: number[];
+  texture: Texture | null;
+  /** The colour string the numbers came from, so it is not parsed again. */
+  colorText: string | null;
+  /** Write order inside one Script; its latest write wins between handles. */
+  revision: number;
+};
+
 type MaterialOverrideLayer = {
   id: number;
   selector: ScriptMaterialSelector;
   overrides: MaterialOverrides;
   revisions: MaterialOverrideRevisions;
+  uniforms: Map<string, MaterialUniformOverride>;
 };
 
 type RuntimeMaterial = Material & {
@@ -805,12 +826,50 @@ type MaterialOwner = {
   layers: readonly MaterialOverrideLayer[];
 };
 
+type MaterialUniformHolder = { value: unknown };
+
+type MaterialUniformKind =
+  | "number"
+  | "texture"
+  | "color"
+  | "math"
+  | "array"
+  | "unsupported";
+
+/** A uniform of a Script-owned clone whose value a Script has taken over. */
+type OwnedMaterialUniform = {
+  /** The entry placed in the clone's uniforms. Its `value` is computed. */
+  holder: MaterialUniformHolder;
+  override: MaterialUniformOverride;
+  /** The kind of the Material's own value, which decides the hand-over. */
+  kind: MaterialUniformKind;
+  /** An object shaped like the Material's own value, where it is one. */
+  storage: unknown;
+};
+
+/**
+ * The uniform table of one Script-owned custom shader clone.
+ *
+ * three.js keeps reading the `uniforms` object a Material had at its first
+ * draw and ignores a replacement, so this object lives as long as the clone
+ * and only its entries change. An entry is the Material's own `{ value }`
+ * holder until a Script overrides that name. Sharing the holder is what lets
+ * the clock, wind and lighting a surface writes into the Material reach the
+ * clone, which would otherwise freeze at the values it was copied with.
+ */
+type MaterialUniformBinding = {
+  uniforms: Record<string, MaterialUniformHolder>;
+  owned: Map<string, OwnedMaterialUniform>;
+};
+
 type MaterialState = {
   original: Material | Material[];
   clones: Material[];
   assigned: Material | Material[];
   owners: MaterialOwner[];
   textureClones: ScriptMaterialTextureClonePool;
+  /** One entry per clone; null where the Material is not a custom shader. */
+  uniforms: (MaterialUniformBinding | null)[];
 };
 
 const materialStates = new WeakMap<Mesh, MaterialState>();
@@ -1219,19 +1278,20 @@ export function createScriptResources({
 
   const synchronizeMaterials = (force: boolean) => {
     if (disposed) return;
-    const activeLayers = [...materialLayers.values()].filter((layer) =>
-      hasMaterialOverrides(layer.overrides),
+    const activeLayers = [...materialLayers.values()].filter(
+      materialLayerIsActive,
     );
     const currentMeshes = new Set<Mesh>();
     forEachOwnedMesh(object3d, entityId, (mesh, meshIndex) => {
       const materialCount = materialArray(mesh.material).length;
-      const matchingLayers = activeLayers.filter((layer) =>
-        materialLayerMatchesMesh(
-          layer,
-          mesh.name,
-          meshIndex,
-          materialCount,
-        ),
+      const matchingLayers = activeLayers.filter(
+        (layer) =>
+          materialLayerMatchesMesh(
+            layer,
+            mesh.name,
+            meshIndex,
+            materialCount,
+          ) && materialLayerReachesMesh(layer, mesh),
       );
       if (matchingLayers.length === 0) return;
       currentMeshes.add(mesh);
@@ -1257,6 +1317,7 @@ export function createScriptResources({
       owner.layers = matchingLayers;
       owner.layerKey = nextLayerKey;
       if (force || !ownerWasCurrent) applyMaterialState(state);
+      else followMaterialUniforms(state);
     });
     for (const mesh of [...ownedMeshes]) {
       if (currentMeshes.has(mesh)) continue;
@@ -1299,6 +1360,62 @@ export function createScriptResources({
       });
     });
     return supported;
+  };
+
+  /**
+   * Counts the targeted custom shader Materials that declare `name`.
+   *
+   * With an override it also refuses a value one of them could not take, read
+   * against the Material's own value rather than against what a Script put
+   * there, so a mistake is caught here and not as a WebGL error at every draw.
+   */
+  const countUniformTargets = (
+    selector: ScriptMaterialSelector,
+    name: string,
+    override?: MaterialUniformOverride,
+  ): number => {
+    if (disposed) return 0;
+    let targets = 0;
+    forEachOwnedMesh(object3d, entityId, (mesh, meshIndex) => {
+      if (!materialSelectorMatchesMesh(selector, mesh.name, meshIndex)) return;
+      const state = materialStates.get(mesh);
+      const sources =
+        state && sameMaterialAssignment(mesh.material, state.assigned)
+          ? state.original
+          : mesh.material;
+      const slots = Array.isArray(sources) ? sources.length : 1;
+      for (let materialIndex = 0; materialIndex < slots; materialIndex += 1) {
+        if (!materialSelectorMatchesSlot(selector, materialIndex)) continue;
+        const uniforms = customShaderUniforms(
+          Array.isArray(sources) ? sources[materialIndex] : sources,
+        );
+        if (!uniforms || !hasOwnUniform(uniforms, name)) continue;
+        if (override) {
+          assertMaterialUniformFits(
+            name,
+            meshIndex,
+            materialIndex,
+            uniforms[name]?.value,
+            override,
+          );
+        }
+        targets += 1;
+      }
+    });
+    return targets;
+  };
+
+  /** Hands a changed uniform to the Materials this Script already owns. */
+  const refreshMaterialUniform = (name: string) => {
+    for (const mesh of ownedMeshes) {
+      const state = materialStates.get(mesh);
+      if (!state || !sameMaterialAssignment(mesh.material, state.assigned)) {
+        continue;
+      }
+      for (let index = 0; index < state.uniforms.length; index += 1) {
+        bindMaterialUniform(state, index, name);
+      }
+    }
   };
 
   const resetMaterials = () => {
@@ -1419,6 +1536,42 @@ export function createScriptResources({
         return countMaterials(layer.selector, (material) =>
           supportsMaterialTexture(material, slot),
         );
+      },
+      setUniform(name, value) {
+        if (disposed) return 0;
+        if (typeof name !== "string" || name.length === 0) {
+          throw new TypeError(
+            "ctx.materials.setUniform: uniformの名前は空でない文字列で指定してください。",
+          );
+        }
+        const incoming = MATERIAL_UNIFORM_SCRATCH;
+        try {
+          // Read and check first: a refused call leaves the earlier override
+          // and every Material exactly as they were.
+          let override = layer.uniforms.get(name);
+          readMaterialUniformValue(name, value, incoming, override);
+          const targets = countUniformTargets(layer.selector, name, incoming);
+          const added = !override;
+          if (!override) {
+            override = createMaterialUniformOverride();
+            layer.uniforms.set(name, override);
+          }
+          copyMaterialUniformOverride(override, incoming);
+          override.revision = ++nextMaterialWriteRevision;
+          // A name set for the first time can bring Meshes under this Script.
+          // A new value for a known name only has to reach the clones it
+          // already owns, which keeps a per-frame call off the full re-apply.
+          if (added) synchronizeMaterials(false);
+          refreshMaterialUniform(name);
+          return targets;
+        } finally {
+          incoming.texture = null;
+        }
+      },
+      resetUniform(name) {
+        if (disposed || typeof name !== "string") return 0;
+        if (layer.uniforms.delete(name)) synchronizeMaterials(true);
+        return countUniformTargets(layer.selector, name);
       },
       reset,
     };
@@ -1993,10 +2146,12 @@ function createMaterialOverrideLayer(
     selector,
     overrides: { textures: {}, textureTransforms: {} },
     revisions: { textures: {}, textureTransforms: {} },
+    uniforms: new Map(),
   };
 }
 
 function clearMaterialOverrideLayer(layer: MaterialOverrideLayer): void {
+  layer.uniforms.clear();
   delete layer.overrides.color;
   delete layer.overrides.opacity;
   delete layer.overrides.emissive;
@@ -2077,6 +2232,46 @@ function materialLayerMatchesMesh(
   );
 }
 
+function materialLayerIsActive(layer: MaterialOverrideLayer): boolean {
+  return hasMaterialOverrides(layer.overrides) || layer.uniforms.size > 0;
+}
+
+/**
+ * A layer that overrides nothing but uniforms leaves a Mesh alone unless one
+ * of its Materials declares such a uniform. Nothing on that Mesh would change,
+ * so its Material is not replaced with a clone either.
+ */
+function materialLayerReachesMesh(
+  layer: MaterialOverrideLayer,
+  mesh: Mesh,
+): boolean {
+  if (hasMaterialOverrides(layer.overrides)) return true;
+  const materials = mesh.material;
+  if (!Array.isArray(materials)) {
+    return (
+      materialSelectorMatchesSlot(layer.selector, 0) &&
+      materialDeclaresUniform(materials, layer.uniforms)
+    );
+  }
+  return materials.some(
+    (material, materialIndex) =>
+      materialSelectorMatchesSlot(layer.selector, materialIndex) &&
+      materialDeclaresUniform(material, layer.uniforms),
+  );
+}
+
+function materialDeclaresUniform(
+  material: Material,
+  names: ReadonlyMap<string, unknown>,
+): boolean {
+  const uniforms = customShaderUniforms(material);
+  if (!uniforms) return false;
+  for (const name of names.keys()) {
+    if (hasOwnUniform(uniforms, name)) return true;
+  }
+  return false;
+}
+
 function ensureMaterialOwner(
   mesh: Mesh,
   token: object,
@@ -2100,6 +2295,14 @@ function ensureMaterialOwner(
       assigned,
       owners: [],
       textureClones: new ScriptMaterialTextureClonePool(),
+      uniforms: clones.map((clone, index) =>
+        customShaderUniforms(originals[index])
+          ? {
+              uniforms: (clone as ShaderMaterial).uniforms,
+              owned: new Map(),
+            }
+          : null,
+      ),
     };
     materialStates.set(mesh, state);
     mesh.material = assigned;
@@ -2145,6 +2348,12 @@ function applyMaterialState(state: MaterialState): void {
   const activeTextureCloneKeys = new Set<string>();
   state.clones.forEach((clone, index) => {
     clone.copy(originals[index] ?? originals[0]!);
+    const binding = state.uniforms[index];
+    if (binding) {
+      // ShaderMaterial.copy() leaves a new uniforms object on the clone, and
+      // the renderer never looks at it. Put back the one it reads.
+      (clone as ShaderMaterial).uniforms = binding.uniforms;
+    }
     const overrides = mergeMaterialOverrides(state.owners, index);
     applyMaterialOverrides(clone, overrides);
     applyMaterialTextureTransforms(
@@ -2154,6 +2363,7 @@ function applyMaterialState(state: MaterialState): void {
       overrides.textureTransforms,
       activeTextureCloneKeys,
     );
+    bindMaterialUniforms(state, index);
   });
   state.textureClones.releaseUnused(activeTextureCloneKeys);
   state.clones.forEach((clone, index) => {
@@ -2514,6 +2724,498 @@ function applyMaterialTextureTransform(
     texture.rotation = transform.rotation;
   }
   texture.updateMatrix();
+}
+
+/**
+ * The uniforms of a custom shader Material, or null for any other Material.
+ *
+ * A custom shader here is three.js's own ShaderMaterial or RawShaderMaterial,
+ * which is what Studio builds from authored GLSL and from an Open Brush
+ * preset. A subclass such as MToon exposes its uniforms as properties of its
+ * own and is changed through those, so it is not offered by name.
+ */
+function customShaderUniforms(
+  material: Material | undefined,
+): Record<string, MaterialUniformHolder> | null {
+  if (!material) return null;
+  const prototype: unknown = Object.getPrototypeOf(material);
+  if (
+    prototype !== ShaderMaterial.prototype &&
+    prototype !== RawShaderMaterial.prototype
+  ) {
+    return null;
+  }
+  const uniforms: unknown = (material as ShaderMaterial).uniforms;
+  return typeof uniforms === "object" && uniforms !== null
+    ? (uniforms as Record<string, MaterialUniformHolder>)
+    : null;
+}
+
+/** Own names only: `constructor` and its kin are not uniforms. */
+function hasOwnUniform(uniforms: object, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(uniforms, name);
+}
+
+function createMaterialUniformOverride(): MaterialUniformOverride {
+  return {
+    kind: "number",
+    number: 0,
+    numbers: [],
+    texture: null,
+    colorText: null,
+    revision: 0,
+  };
+}
+
+/** Where a call's value is read before it is known to be acceptable. */
+const MATERIAL_UNIFORM_SCRATCH = createMaterialUniformOverride();
+const MATERIAL_UNIFORM_COLOR = new Color();
+
+function copyMaterialUniformOverride(
+  target: MaterialUniformOverride,
+  source: MaterialUniformOverride,
+): void {
+  target.kind = source.kind;
+  target.number = source.number;
+  target.texture = source.texture;
+  target.colorText = source.colorText;
+  const length = source.kind === "numbers" ? source.numbers.length : 0;
+  target.numbers.length = length;
+  for (let index = 0; index < length; index += 1) {
+    target.numbers[index] = source.numbers[index] ?? 0;
+  }
+}
+
+function materialUniformError(name: string, reason: string): TypeError {
+  return new TypeError(
+    `ctx.materials.setUniform(${JSON.stringify(name)}): ${reason}`,
+  );
+}
+
+function isNumberList(value: unknown): value is ArrayLike<unknown> {
+  return (
+    Array.isArray(value) ||
+    (ArrayBuffer.isView(value) && !(value instanceof DataView))
+  );
+}
+
+/** How many numbers a three.js vector or matrix carries, or 0 otherwise. */
+function uniformMathSize(value: object): number {
+  const math = value as {
+    isVector2?: unknown;
+    isVector3?: unknown;
+    isVector4?: unknown;
+    isMatrix3?: unknown;
+    isMatrix4?: unknown;
+  };
+  if (math.isVector2 === true) return 2;
+  if (math.isVector3 === true) return 3;
+  if (math.isVector4 === true) return 4;
+  if (math.isMatrix3 === true) return 9;
+  if (math.isMatrix4 === true) return 16;
+  return 0;
+}
+
+function isUniformColor(value: object): boolean {
+  return (value as { isColor?: unknown }).isColor === true;
+}
+
+function isUniformTexture(value: object): value is Texture {
+  return (
+    value instanceof Texture ||
+    (value as { isTexture?: unknown }).isTexture === true
+  );
+}
+
+/**
+ * Reads what a Script passed into `target`, reusing its storage.
+ *
+ * Only what no uniform could take is refused here. Whether the value fits a
+ * particular uniform depends on the Material and is decided against it.
+ */
+function readMaterialUniformValue(
+  name: string,
+  value: unknown,
+  target: MaterialUniformOverride,
+  previous: MaterialUniformOverride | undefined,
+): void {
+  target.texture = null;
+  target.colorText = null;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw materialUniformError(
+        name,
+        "NaNや無限大は渡せません。有限の数値を渡してください。",
+      );
+    }
+    target.kind = "number";
+    target.number = value;
+    return;
+  }
+  if (typeof value === "string") {
+    target.kind = "numbers";
+    target.colorText = value;
+    target.numbers.length = 3;
+    if (previous?.colorText === value) {
+      // The same string as last frame: its numbers are already known.
+      for (let index = 0; index < 3; index += 1) {
+        target.numbers[index] = previous.numbers[index] ?? 0;
+      }
+      return;
+    }
+    // three.js leaves a Color untouched when it cannot read the string, so an
+    // unreadable one shows as the NaN it started from.
+    const color = MATERIAL_UNIFORM_COLOR;
+    color.setRGB(Number.NaN, Number.NaN, Number.NaN).set(value);
+    if (Number.isNaN(color.r + color.g + color.b)) {
+      throw materialUniformError(
+        name,
+        `${JSON.stringify(value)}を色として読めません。"#rrggbb"や色の名前で指定してください。`,
+      );
+    }
+    color.toArray(target.numbers);
+    return;
+  }
+  if (value === null) {
+    target.kind = "texture";
+    return;
+  }
+  if (typeof value === "object") {
+    if (isUniformTexture(value)) {
+      target.kind = "texture";
+      target.texture = value;
+      return;
+    }
+    const size = isNumberList(value)
+      ? value.length
+      : isUniformColor(value)
+        ? 3
+        : uniformMathSize(value);
+    if (isNumberList(value) && size === 0) {
+      throw materialUniformError(name, "空の配列は渡せません。");
+    }
+    if (size > 0) {
+      target.kind = "numbers";
+      target.numbers.length = size;
+      if (isNumberList(value)) {
+        for (let index = 0; index < size; index += 1) {
+          target.numbers[index] = value[index] as number;
+        }
+      } else {
+        (value as { toArray(array: number[]): unknown }).toArray(
+          target.numbers,
+        );
+      }
+      for (let index = 0; index < size; index += 1) {
+        const entry: unknown = target.numbers[index];
+        if (typeof entry !== "number" || !Number.isFinite(entry)) {
+          throw materialUniformError(
+            name,
+            "配列やベクトルには有限の数値だけを入れてください。",
+          );
+        }
+      }
+      return;
+    }
+  }
+  if (typeof value === "boolean") {
+    throw materialUniformError(
+      name,
+      "真偽値は渡せません。GLSLのboolには0か1を渡してください。",
+    );
+  }
+  throw materialUniformError(
+    name,
+    "数値、数値の配列、色、Vector2〜4、Matrix3、Matrix4、Color、テクスチャ、nullのいずれかを渡してください。",
+  );
+}
+
+/** What a uniform takes, read from the value the Material itself holds. */
+function materialUniformKind(value: unknown): MaterialUniformKind {
+  if (typeof value === "number" || typeof value === "boolean") return "number";
+  // A sampler whose texture has not arrived holds null.
+  if (value === null || value === undefined) return "texture";
+  if (typeof value !== "object") return "unsupported";
+  if (isUniformTexture(value)) return "texture";
+  if (isUniformColor(value)) return "color";
+  if (uniformMathSize(value) > 0) return "math";
+  if (isNumberList(value) && materialUniformArrayLength(value) >= 0) {
+    return "array";
+  }
+  return "unsupported";
+}
+
+/**
+ * How many numbers an array-valued uniform takes: 0 when the Material's array
+ * is empty and any count fits, -1 when the array does not hold numbers.
+ */
+function materialUniformArrayLength(value: ArrayLike<unknown>): number {
+  if (value.length === 0) return 0;
+  const first = value[0];
+  if (typeof first === "number") return value.length;
+  if (typeof first !== "object" || first === null) return -1;
+  // `vec3 points[4]` may be held as four Vector3; it takes twelve numbers.
+  const size = isUniformColor(first) ? 3 : uniformMathSize(first);
+  return size > 0 ? value.length * size : -1;
+}
+
+/** Whether a Script value can fill a uniform whose own value is `authored`. */
+function materialUniformFits(
+  authored: unknown,
+  override: MaterialUniformOverride,
+): boolean {
+  const count = override.kind === "numbers" ? override.numbers.length : -1;
+  switch (materialUniformKind(authored)) {
+    case "number":
+      return override.kind === "number";
+    case "texture":
+      return override.kind === "texture";
+    case "color":
+      // A lone number on a colour is the hexadecimal form setColor takes.
+      return override.kind === "number" || count === 3;
+    case "math":
+      return count === uniformMathSize(authored as object);
+    case "array": {
+      const length = materialUniformArrayLength(authored as ArrayLike<unknown>);
+      return count > 0 && (length === 0 || count === length);
+    }
+    default:
+      return false;
+  }
+}
+
+/**
+ * Names the Material by its place in `ctx.materials.list()`, which is the
+ * same in Play and in a published world and is what `select` takes.
+ */
+function assertMaterialUniformFits(
+  name: string,
+  meshIndex: number,
+  materialIndex: number,
+  authored: unknown,
+  override: MaterialUniformOverride,
+): void {
+  if (materialUniformFits(authored, override)) return;
+  const kind = materialUniformKind(authored);
+  const where = `（meshIndex ${meshIndex}、materialIndex ${materialIndex}のマテリアル）`;
+  if (kind === "unsupported") {
+    throw materialUniformError(
+      name,
+      `このuniformはsetUniformで扱えない種類の値を持っています${where}。`,
+    );
+  }
+  const length =
+    kind === "math"
+      ? uniformMathSize(authored as object)
+      : kind === "array"
+        ? materialUniformArrayLength(authored as ArrayLike<unknown>)
+        : 0;
+  const expected =
+    kind === "number"
+      ? "数値1個"
+      : kind === "texture"
+        ? "テクスチャかnull"
+        : kind === "color"
+          ? "色か数値3個"
+          : length > 0
+            ? `数値${length}個`
+            : "数値の配列";
+  const received =
+    override.kind === "number"
+      ? "数値1個"
+      : override.kind === "numbers"
+        ? `数値${override.numbers.length}個`
+        : override.texture
+          ? "テクスチャ"
+          : "null";
+  throw materialUniformError(
+    name,
+    `このuniformは${expected}を受け取りますが、${received}が渡されました${where}。`,
+  );
+}
+
+function materialStateSource(state: MaterialState, index: number): Material {
+  const original = state.original;
+  return Array.isArray(original) ? original[index] ?? original[0]! : original;
+}
+
+/**
+ * Builds the entry a Script-owned uniform is drawn from.
+ *
+ * `value` is computed on every read and ignores writes. Some surfaces drive a
+ * clock by writing through whichever Material is on the Mesh, and the
+ * renderer writes fog the same way; with a plain `{ value }` either could
+ * replace or scribble on the Script's value between the Script's update and
+ * the draw, depending on the order two frame callbacks happened to run in.
+ */
+function createOwnedMaterialUniform(
+  override: MaterialUniformOverride,
+): OwnedMaterialUniform {
+  const owned: OwnedMaterialUniform = {
+    holder: {} as MaterialUniformHolder,
+    override,
+    kind: "number",
+    storage: undefined,
+  };
+  Object.defineProperty(owned.holder, "value", {
+    configurable: true,
+    enumerable: true,
+    get: () => readOwnedMaterialUniform(owned),
+    set: () => {},
+  });
+  return owned;
+}
+
+function readOwnedMaterialUniform(owned: OwnedMaterialUniform): unknown {
+  const { override, storage } = owned;
+  switch (owned.kind) {
+    case "texture":
+      return override.texture;
+    case "color": {
+      const color = storage as Color;
+      return override.kind === "number"
+        ? color.set(override.number)
+        : color.fromArray(override.numbers);
+    }
+    case "math":
+      return (
+        storage as { fromArray(numbers: number[]): unknown }
+      ).fromArray(override.numbers);
+    case "array": {
+      const list = storage as { length: number; [index: number]: number };
+      const length = Math.min(list.length, override.numbers.length);
+      for (let index = 0; index < length; index += 1) {
+        list[index] = override.numbers[index] ?? 0;
+      }
+      return list;
+    }
+    default:
+      return override.number;
+  }
+}
+
+/**
+ * Gives an owned uniform storage of the Material's own kind, so the value
+ * reaches the shader the way the Material's own value would have: a Vector3
+ * stays a Vector3, a typed array keeps its type. Kept while that kind lasts.
+ */
+function shapeOwnedMaterialUniform(
+  owned: OwnedMaterialUniform,
+  authored: unknown,
+): void {
+  const kind = materialUniformKind(authored);
+  const current = owned.kind === kind ? owned.storage : undefined;
+  if (kind === "color") {
+    owned.storage = current ?? new Color();
+  } else if (kind === "math") {
+    const math = authored as { constructor: unknown; clone(): unknown };
+    owned.storage =
+      (current as object | undefined)?.constructor === math.constructor
+        ? current
+        : math.clone();
+  } else if (kind === "array") {
+    const length = owned.override.numbers.length;
+    // Vectors in an array are handed over as the flat numbers three.js sends.
+    const constructor = ArrayBuffer.isView(authored)
+      ? (authored.constructor as new (length: number) => unknown)
+      : Array;
+    const list = current as
+      | { length: number; constructor: unknown }
+      | undefined;
+    owned.storage =
+      list && list.constructor === constructor && list.length === length
+        ? list
+        : new constructor(length);
+  } else {
+    owned.storage = undefined;
+  }
+  owned.kind = kind;
+}
+
+/**
+ * Decides what one uniform of a Script-owned clone is drawn from: the latest
+ * fitting override of the last Script in Component order, and otherwise the
+ * Material's own holder.
+ */
+function bindMaterialUniform(
+  state: MaterialState,
+  index: number,
+  name: string,
+): void {
+  const binding = state.uniforms[index];
+  if (!binding) return;
+  const source = customShaderUniforms(materialStateSource(state, index));
+  const authored =
+    source && hasOwnUniform(source, name) ? source[name] : undefined;
+  let winner: MaterialUniformOverride | undefined;
+  if (authored) {
+    for (const owner of state.owners) {
+      let latest: MaterialUniformOverride | undefined;
+      for (const layer of owner.layers) {
+        if (!materialSelectorMatchesSlot(layer.selector, index)) continue;
+        const override = layer.uniforms.get(name);
+        if (
+          override &&
+          (!latest || override.revision > latest.revision) &&
+          materialUniformFits(authored.value, override)
+        ) {
+          latest = override;
+        }
+      }
+      if (latest) winner = latest;
+    }
+  }
+  const owned = binding.owned.get(name);
+  if (!authored || !winner) {
+    if (owned) binding.owned.delete(name);
+    if (authored) binding.uniforms[name] = authored;
+    else if (owned) delete binding.uniforms[name];
+    return;
+  }
+  const next = owned ?? createOwnedMaterialUniform(winner);
+  next.override = winner;
+  shapeOwnedMaterialUniform(next, authored.value);
+  if (!owned) binding.owned.set(name, next);
+  binding.uniforms[name] = next.holder;
+}
+
+function bindMaterialUniforms(state: MaterialState, index: number): void {
+  const binding = state.uniforms[index];
+  if (!binding) return;
+  const source = customShaderUniforms(materialStateSource(state, index));
+  if (source) {
+    for (const name in source) bindMaterialUniform(state, index, name);
+  }
+  // An override whose uniform the Material no longer has is taken off.
+  for (const name of [...binding.owned.keys()]) {
+    if (!source || !hasOwnUniform(source, name)) {
+      bindMaterialUniform(state, index, name);
+    }
+  }
+}
+
+/**
+ * Keeps the untouched uniforms of a Script-owned clone on the Material's
+ * current holders, for a surface that swaps a holder or the whole table.
+ */
+function followMaterialUniforms(state: MaterialState): void {
+  for (let index = 0; index < state.uniforms.length; index += 1) {
+    const binding = state.uniforms[index];
+    if (!binding) continue;
+    const source = customShaderUniforms(materialStateSource(state, index));
+    if (!source) continue;
+    for (const name in source) {
+      const authored = source[name];
+      if (
+        authored &&
+        hasOwnUniform(source, name) &&
+        !binding.owned.has(name) &&
+        binding.uniforms[name] !== authored
+      ) {
+        binding.uniforms[name] = authored;
+      }
+    }
+  }
 }
 
 function hasMaterialOverrides(overrides: MaterialOverrides): boolean {
