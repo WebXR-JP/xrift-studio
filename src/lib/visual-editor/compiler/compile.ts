@@ -3,6 +3,7 @@ import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtim
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
 import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
 import stableModelCloneSource from "../../../../packages/xrift-studio-runtime/src/stable-model-clone.tsx?raw";
+import gltfInstanceAttributesSource from "../../../../packages/xrift-studio-runtime/src/gltf-instance-attributes.ts?raw";
 import extrudeGeometrySource from "../../../../packages/xrift-studio-runtime/src/extrude-geometry.ts?raw";
 import extrudeProfileSource from "../../../../packages/xrift-studio-runtime/src/extrude-profile.ts?raw";
 import { validateXriftExtrudeProfile } from "../../../../packages/xrift-studio-runtime/src/extrude-profile";
@@ -2871,7 +2872,7 @@ function renderModelNodeColliderGeometry(
   }
   const source = `const ${componentName}: FC = () => {
 ${usesDraco ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n" : ""}  const modelUrl = useCompiledAssetUrl(${urlConstant});
-  const { scene, parser } = useLoader(GLTFLoader, modelUrl${usesDraco ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))" : ""});
+  const { scene, parser } = useLoader(GLTFLoader, modelUrl, ${registerCompiledGltfLoaderSetup(context, usesDraco)});
   const colliderNode = useMemo(() => {
     const cloned = cloneSkeleton(scene);
     const originals: typeof scene.children = [];
@@ -3854,21 +3855,16 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
   const dracoBinding = usesDraco
     ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n"
     : "";
+  const gltfLoaderSetup = isObj
+    ? ""
+    : registerCompiledGltfLoaderSetup(context, usesDraco);
   const loaderSource =
     dracoBinding +
     (isObj
       ? "const scene = useLoader(OBJLoader, modelUrl);"
       : isOpenBrush
-        ? `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl${
-            usesDraco
-              ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
-              : ""
-          });`
-        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""}${isVrm ? ", userData: vrmUserData" : ""} } = useLoader(${isVrm ? "CompiledVRMGLTFLoader" : "GLTFLoader"}, modelUrl${
-            usesDraco
-              ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
-              : ""
-          });`);
+        ? `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl, ${gltfLoaderSetup});`
+        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""}${isVrm ? ", userData: vrmUserData" : ""} } = useLoader(${isVrm ? "CompiledVRMGLTFLoader" : "GLTFLoader"}, modelUrl, ${gltfLoaderSetup});`);
   const vrmSource = isVrm ? `  if (!scene.userData.xriftStudioVrmPrepared) {
     const vrm = vrmUserData.vrm as VRM | undefined;
     if (vrm) {
@@ -5428,6 +5424,31 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
  * 通信権限を持たないので、その経路ではModelごと読み込めない。KTX2と同じく
  * ワールド直下へコピーしたファイルを指す。
  */
+/**
+ * The loader set-up every emitted glTF `useLoader` call passes.
+ *
+ * Custom per-instance attributes of `EXT_mesh_gpu_instancing` are delivered by
+ * the module the Editor's loader registers, so that module ships with the
+ * world and is registered here. useLoader keeps one loader per class and one
+ * result per URL, which is why the Model and its node Colliders pass the same
+ * set-up. Draco is added only for a Model that needs its decoder.
+ */
+function registerCompiledGltfLoaderSetup(
+  context: CompileContext,
+  usesDraco: boolean,
+): string {
+  context.extraImports.add(
+    'import { registerGltfInstanceAttributes } from "./xrift-studio/gltf-instance-attributes";',
+  );
+  context.runtimeOverlayFiles.set(
+    "src/xrift-studio/gltf-instance-attributes.ts",
+    compilerFile("src/xrift-studio/gltf-instance-attributes.ts", gltfInstanceAttributesSource),
+  );
+  return usesDraco
+    ? "(loader) => registerGltfInstanceAttributes(loader).setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
+    : "registerGltfInstanceAttributes";
+}
+
 function registerCompiledDracoRuntime(context: CompileContext): void {
   const key = "model-runtime:use-compiled-draco-decoder-path";
   if (context.supportDeclarations.has(key)) return;
