@@ -12,13 +12,14 @@ import { XriftWorld } from "../packages/xrift-studio-runtime/src/react-three-fib
 import type { AssetManifest, MaterialAsset, TextureAsset } from "../src/lib/visual-editor/asset-manifest";
 import type { ClassicR3fShaderUniform } from "../src/lib/visual-editor/custom-shader-contract";
 import type { MeshComponent, SceneEntity } from "../src/lib/visual-editor/scene-document";
+import { loadBuiltShellWorld } from "./vrm-mtoon-render.fixture";
 
 extend(THREE);
 const directory = "/node_modules/.cache/xrift-studio/custom-shader-render-parity/";
 const SIZE = 160;
 const TEXTURE_UNIFORMS = ["uPicture", "uData", "uLut", "uSky"];
-/** Edit, the generated World and the Runtime JSON adapter. */
-type Mode = "edit" | "jsx" | "runtime";
+/** Edit, the generated World, the Runtime JSON adapter from source and the built shell. */
+type Mode = "edit" | "jsx" | "runtime" | "shell";
 type ShaderMesh = THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
 function base64(bytes: Uint8Array) {
@@ -106,9 +107,14 @@ export async function renderCustomShaderParity(mode: Mode) {
     const expected = mode === "edit" ? 12 : 2;
     if (mode === "edit") root.render(wrap(editorMeshes()));
     else if (mode === "jsx") root.render(wrap(React.createElement(generated.World)));
-    else {
+    else if (mode === "runtime") {
       // What the browser publication shell mounts, here from source.
       root.render(wrap(<Physics paused><XriftWorld manifest={`${location.origin}${directory}${generated.parityRuntimeManifest}`} physics="inherit" /></Physics>));
+    } else {
+      // The shell as it is published from the browser: the build in public/,
+      // reading its manifest and files from its own folder.
+      const World = await loadBuiltShellWorld(`${location.origin}/xrift-runtime-shell/remoteEntry.js`);
+      root.render(wrap(<Physics paused>{React.createElement(World)}</Physics>));
     }
     const meshes = await waitFor(() => {
       const found = shaderMeshes();

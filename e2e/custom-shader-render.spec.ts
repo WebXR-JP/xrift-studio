@@ -1,13 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 import { execFileSync } from "node:child_process";
+import path from "node:path";
 import zlib from "node:zlib";
 
 const SIZE = 160;
-// Edit, the generated World and the Runtime JSON adapter that the browser
-// publication shell mounts. The adapter is drawn from source: the shell in
-// public/ is a build of it, made by scripts/build-world-runtime-shell.mjs.
-const MODES = ["edit", "jsx", "runtime"] as const;
+const output = path.resolve("node_modules/.cache/xrift-studio/custom-shader-render-parity/public");
+// Edit, the generated World, the Runtime JSON adapter from source, and the
+// built shell in public/ that browser publication uploads. The last one fails
+// when the adapter changes and the shell is not rebuilt with
+// scripts/build-world-runtime-shell.mjs.
+const MODES = ["edit", "jsx", "runtime", "shell"] as const;
 
 /** A frame as read back from the GPU (bottom row first), as a PNG for the report. */
 function png(frame: Buffer) {
@@ -29,10 +32,14 @@ test.beforeAll(() => {
   execFileSync(process.execPath, ["e2e/custom-shader-published.prepare.cjs"], { stdio: "pipe" });
 });
 
-test("カスタムシェーダーの新しいuniformと合成・カリングの設定を、編集と公開の2経路が同じ絵で描く", async ({ page }, info) => {
+test("カスタムシェーダーの新しいuniformと合成・カリングの設定を、編集と公開の全経路が同じ絵で描く", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  // The built shell reads its manifest and files from its own folder.
+  await page.route("**/xrift-runtime-shell/xrift-runtime.json", route => route.fulfill({ path: path.join(output, "xrift-runtime.json") }));
+  await page.route("**/xrift-runtime-shell/xrift-runtime-asset-*", route =>
+    route.fulfill({ path: path.join(output, path.basename(new URL(route.request().url()).pathname)) }));
   await page.goto("/e2e/custom-shader-render.html");
 
   const reports = [];
