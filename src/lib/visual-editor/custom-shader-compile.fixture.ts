@@ -1,4 +1,7 @@
+import { xriftShaderSourceKey } from "../../../packages/xrift-studio-runtime/src/shader-compile-errors";
 import { createDefaultMaterialAsset, type MaterialAsset } from "./asset-manifest";
+import { compileVisualProject } from "./compiler/compile";
+import { BUILTIN_PRIMITIVE_CREATION_IDS } from "./creation-catalog";
 import {
   MCP_CUSTOM_SHADER_COMPILE_WAIT_MS,
   MCP_SCENE_VIEW_WAIT_MS,
@@ -24,6 +27,7 @@ import {
   type XriftMcpEditorContext,
 } from "./mcp-editor-tools";
 import { createPrototypeProject } from "./prototype-project";
+import { addBuiltinPrimitiveEntity } from "./scene-document";
 
 const BROKEN_FRAGMENT = `uniform vec3 uColor;
 varying vec2 vUv;
@@ -86,6 +90,7 @@ export async function runCustomShaderCompileFixtureAssertions(): Promise<void> {
   await assertStoreOrdering();
   await assertMcpCheck();
   assertMcpTools();
+  assertPublishedWorldNamesTheMaterial();
 }
 
 function assertSourceKey(): void {
@@ -656,6 +661,90 @@ function assertMcpTools(): void {
   assert(
     compiled.status === "ok" && compiled.issues.length === 0,
     "a shader the Scene View compiled is reported as ok",
+  );
+}
+
+/**
+ * A published world has no Inspector, so a Custom Shader that does not compile
+ * there is named in the console by the same reader the editor uses.
+ */
+function assertPublishedWorldNamesTheMaterial(): void {
+  const prototype = createPrototypeProject("world", "custom-shader-published");
+  const withoutShader = compileVisualProject({
+    project: prototype.project,
+    scenes: { [prototype.scene.sceneId]: prototype.scene },
+    assets: prototype.assets,
+    prefabs: prototype.prefabs,
+  });
+  const entryOf = (result: ReturnType<typeof compileVisualProject>) =>
+    result.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+  const pathsOf = (result: ReturnType<typeof compileVisualProject>) =>
+    result.overlayFiles.map((file) => file.relativePath);
+  assert(
+    !entryOf(withoutShader).includes("XriftCustomShaderErrorLog") &&
+      !pathsOf(withoutShader).some((path) => path.includes("shader-compile")),
+    "a world without a Custom Shader must not carry the reader",
+  );
+
+  const shader = brokenShader();
+  const asset = { ...material("published-shader", shader), name: "Glow 板" };
+  const unused = material("published-unused", createDefaultCustomShader());
+  const assets = {
+    ...prototype.assets,
+    assets: { ...prototype.assets.assets, [asset.id]: asset, [unused.id]: unused },
+  };
+  const placed = addBuiltinPrimitiveEntity(
+    prototype.scene,
+    assets,
+    BUILTIN_PRIMITIVE_CREATION_IDS.plane,
+    asset.id,
+  );
+  if (!placed) throw new Error("custom shader compile fixture: could not place a plane");
+  const documents = {
+    project: prototype.project,
+    scenes: { [placed.scene.sceneId]: placed.scene },
+    assets,
+    prefabs: prototype.prefabs,
+  };
+  const compiled = compileVisualProject(documents);
+  const entry = entryOf(compiled);
+  const key = xriftShaderSourceKey(shader.vertexShader, shader.fragmentShader);
+  assert(
+    entry.includes('import { XriftCustomShaderErrorLog } from "./xrift-studio/shader-compile-watch";') &&
+      entry.includes("<XriftCustomShaderErrorLog materials={CUSTOM_SHADER_MATERIAL_NAMES} />"),
+    "a world with a Custom Shader must mount the reader",
+  );
+  assert(
+    entry.includes(`const CUSTOM_SHADER_MATERIAL_NAMES = ${JSON.stringify([{ name: "Glow 板", key }])};`),
+    "the reader is given the name of each Material the world draws, by the key of its GLSL, and no others",
+  );
+  assert(
+    entry.includes(`vertexShader={${JSON.stringify(shader.vertexShader)}}`) &&
+      entry.includes(`fragmentShader={${JSON.stringify(shader.fragmentShader)}}`),
+    "the world must compile the author's GLSL unchanged, which is what the key is computed from",
+  );
+  const watch = compiled.overlayFiles.find(
+    (file) => file.relativePath === "src/xrift-studio/shader-compile-watch.tsx",
+  );
+  const errors = compiled.overlayFiles.find(
+    (file) => file.relativePath === "src/xrift-studio/shader-compile-errors.ts",
+  );
+  assert(
+    watch !== undefined &&
+      watch.content.includes('from "./shader-compile-errors"') &&
+      !watch.content.includes("shader-compile-errors.js") &&
+      watch.content.includes("console.error("),
+    "the reader ships as source the world can import, and reports to the console",
+  );
+  assert(
+    errors !== undefined && errors.content.includes("export function xriftShaderSourceKey("),
+    "the key the world computes comes from the same source the compiler used",
+  );
+
+  const runtimeOnly = compileVisualProject(documents, { outputMode: "classic-runtime" });
+  assert(
+    !pathsOf(runtimeOnly).some((path) => path.includes("shader-compile")),
+    "the runtime package output names its Materials itself and carries no second reader",
   );
 }
 

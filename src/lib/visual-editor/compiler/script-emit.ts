@@ -37,6 +37,8 @@ import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src
 import lightmapRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/lightmap.tsx?raw";
 import lightmapApplySource from "../../../../packages/xrift-studio-runtime/src/lightmap-apply.ts?raw";
 import lightmapDataSource from "../../../../packages/xrift-studio-runtime/src/lightmap-data.ts?raw";
+import shaderCompileWatchSource from "../../../../packages/xrift-studio-runtime/src/script/shader-compile-watch.tsx?raw";
+import shaderCompileErrorsSource from "../../../../packages/xrift-studio-runtime/src/shader-compile-errors.ts?raw";
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
@@ -100,6 +102,8 @@ export const IMAGE_QUAD_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image
 export const LIGHTMAP_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-runtime.tsx`;
 export const LIGHTMAP_APPLY_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-apply.ts`;
 export const LIGHTMAP_DATA_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-data.ts`;
+export const SHADER_COMPILE_WATCH_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/shader-compile-watch.tsx`;
+export const SHADER_COMPILE_ERRORS_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/shader-compile-errors.ts`;
 export const IMAGE_QUAD_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad-layout.ts`;
 export const IMAGE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-runtime.ts`;
 
@@ -346,6 +350,26 @@ export function createLightmapOverlayFiles(): CompilerOverlayFile[] {
     overlay(LIGHTMAP_RUNTIME_OVERLAY_PATH, rewriteLightmapImports(lightmapRuntimeSource)),
     overlay(LIGHTMAP_APPLY_OVERLAY_PATH, rewriteLightmapImports(lightmapApplySource)),
     overlay(LIGHTMAP_DATA_OVERLAY_PATH, rewriteLightmapImports(lightmapDataSource)),
+  ];
+}
+
+/**
+ * Ships the reader of GLSL compile failures with a world that has a Custom
+ * Shader, so a failure names its Material in the console.
+ *
+ * The same source finds failed programs in the editor's Scene View.
+ */
+export function createShaderCompileWatchOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(
+      SHADER_COMPILE_WATCH_OVERLAY_PATH,
+      shaderCompileWatchSource.replace(
+        /(\bfrom\s*)(["'])\.\.\/shader-compile-errors\.js\2/g,
+        (_whole, prefix: string, quote: string) =>
+          `${prefix}${quote}./shader-compile-errors${quote}`,
+      ),
+    ),
+    overlay(SHADER_COMPILE_ERRORS_OVERLAY_PATH, shaderCompileErrorsSource),
   ];
 }
 
