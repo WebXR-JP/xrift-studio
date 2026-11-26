@@ -2301,7 +2301,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_editor_context",
-            "description": "Read the currently open XRift Studio project, scene, selection, mode, save state, revision, and JSON-safe Script runtime diagnostics. Call this before a write and after Play changes. prefabs lists the project's Prefabs with prefabAssetId, name, the sourceEntityId to edit in this Scene (null when the original is elsewhere or deleted) and instanceCount; place one of them before building a repeated object again.",
+            "description": "Read the currently open XRift Studio project, scene, selection, mode, save state, revision, and JSON-safe Script runtime diagnostics. Call this before a write and after Play changes. prefabs lists the project's Prefabs with prefabAssetId, name, the sourceEntityId to edit in this Scene (null when the original is elsewhere or deleted) and instanceCount; place one of them before building a repeated object again. customShaderErrors lists the Materials whose current Custom Shader failed to compile in the Scene View, in Edit or Play, with materialAssetId, materialName, issueCount and the first compiler message; it includes failures nobody asked about, found when a mesh was drawn. Read get_custom_shader for the full logs.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -4290,7 +4290,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "create_custom_shader",
-            "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile.",
+            "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile. The result's compile field reports whether the Scene View could compile and link it: status ok, or error with compile.issues, one per failed program, holding the GLSL compiler's own programLog, vertexLog and fragmentLog plus lines[] whose line is the line in your own source (reportedLine is the number in the raw log, which also counts the code three.js puts in front). The shader is saved even when it does not compile, and its Material then draws nothing, so fix the reported lines with update_custom_shader. status pending (the driver was still compiling after 5 seconds) or unknown (no Scene View was showing) means there is no outcome yet: call get_custom_shader for it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4308,7 +4308,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_custom_shader",
-            "description": "Read the authored GLSL, uniforms, variants, and animated time uniform stored in a Material. Returns an error when the Material is still PBR or an OpenBrush preset.",
+            "description": "Read the authored GLSL, uniforms, variants, and animated time uniform stored in a Material, and compile it in the Scene View to report compile. Choose it to learn why a Material draws nothing, to read in full a failure listed in get_editor_context.customShaderErrors, or after a write answered pending or unknown. compile.status is ok, error, pending or unknown. On error each of compile.issues carries programLog, vertexLog, fragmentLog and lines[] (line is your own source line, reportedLine the line in the raw log); origin check is the Material compiled on a plain mesh for this call, origin scene is the program a mesh in the Scene is drawn with, which an instanced or skinned mesh can fail on its own. Compiling changes nothing in the project, and the call never waits for a Material nothing draws. Returns an error when the Material is still PBR or an OpenBrush preset.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4320,7 +4320,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "update_custom_shader",
-            "description": "Validate and persist a partial GLSL Custom Shader update inside one Material. Updates use the same project, scene, revision, history, autosave, Play dependency, and Scene View path as Material editing; invalid GLSL IR is rejected with diagnostics and does not change the document.",
+            "description": "Validate and persist a partial GLSL Custom Shader update inside one Material. Updates use the same project, scene, revision, history, autosave, Play dependency, and Scene View path as Material editing; invalid GLSL IR is rejected with diagnostics and does not change the document. That validation only checks the shape (void main() in both stages, uniforms, variants): GLSL that passes it is saved even when it does not compile, and the Material then draws nothing. Read compile in the result, which has the same shape as in get_custom_shader: on status error correct the lines named in compile.issues[].lines[].line and send the patch again.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

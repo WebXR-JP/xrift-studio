@@ -245,6 +245,14 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 ストアの見回し・再生停止は一時的なプレビュー操作なのでMCPには追加しない。
 地形の地面は形と一緒に選ぶ。`list_terrain_presets`の方にある。
 
+カスタムシェーダーのGLSLは、Scene Viewのレンダラーでコンパイルして確かめる。`create_custom_shader`、`update_custom_shader`、`get_custom_shader`の結果には`compile`が入る。`compile.status`は`ok`、`error`、`pending`、`unknown`のいずれか。`error`のとき`compile.issues`は失敗したプログラムごとに1件で、GLSLコンパイラの出力をそのまま`programLog`、`vertexLog`、`fragmentLog`に持つ。`lines`の各要素は`stage`、作者のGLSLでの行`line`、ログに出た行`reportedLine`、`message`、該当行の本文`source`を持つ。ログの行番号はThree.jsが前に足すコードと`#include`の展開を数えるため、`line`と`reportedLine`は一致しない。`#include`の中で起きたエラーは、その`#include`の行と`include`の名前を返す。`#line`、展開されるループ、コンパイルした本文との照合で行を確定できない場合は、`line`を返さない。リンクの失敗は行を持たず、`programLog`に理由が入る。
+
+`origin: "check"`は、ツールの呼び出しでMaterialを平面のMeshへ割り当ててコンパイルした結果を表す。Meshへ割り当てていないMaterialや画面外のMaterialも、これで確かめられる。`origin: "scene"`は、Scene内のMeshを実際に描くプログラムの失敗を表す。インスタンス描画やスキンメッシュは専用のプログラムを持つため、そのMeshだけが失敗する場合もここに入る。Sceneがリンク済みのプログラムで描いているvariantは、コンパイルし直さない。
+
+シェーダーは、形式の検証（`void main()`、uniform、variant）を通れば、コンパイルできなくても保存される。その場合、Materialを割り当てたMeshは描画されない。`compile.status`が`error`なら`lines`の行を直し、`update_custom_shader`で送り直す。`pending`はドライバーのコンパイルが5秒以内に終わらなかった場合、`unknown`はScene Viewが表示されていない場合とWebGLコンテキストを失った場合に返る。どちらも`get_custom_shader`を呼び直すと結果を読める。ツールは、描画されないMaterialの結果を待ち続けない。
+
+`get_editor_context`の`customShaderErrors`は、現在のGLSLをコンパイルできないと分かっているMaterialの一覧を返す。各要素は`materialAssetId`、`materialName`、`issueCount`、先頭のメッセージ`message`を持つ。ツールで確かめたMaterialに加えて、Scene ViewがEditまたはPlayで描いて失敗したMaterialも入る。GLSLを書き換えたMaterialは、次にコンパイルするまで一覧から外れる。Skybox Shaderと水面のMaterialも同じ方法で読める。未知の`#include`はThree.jsが描画時に例外にするため、コンパイルの前に見つけて、その行を`lines`に返す。
+
 `kind: "gltf"`はglTF拡張とPBRテクスチャのマテリアルを返す。50種類の見本セットに加え、互換性のために旧カタログの素材IDを保持している。Clearcoat、Transmission、Volume、Dispersion、Iridescence、Sheen、Anisotropy、Emissive、Specular、IOR、Unlitと、Normal Map・ORM・UV・Alphaの比較を含む。
 
 `comparisonMaterialAssetId`は比較用のマテリアルを指す。拡張を比較する見本は基本のPBR値を揃え、テクスチャを比較する見本は比較対象のマップやUV設定だけを変える。`textureAssetIds`は必要な同梱テクスチャを返す。効果を見比べるときは`list_scene_recipes`の`shelf: "materials"`から選び、`apply_scene_recipe`で見本一式を置く。既存のモデルへ質感だけを付けるときは`create_material_from_preset`を使う。テクスチャが必要なプリセットは、保存済みのプロジェクトへ画像も取り込んでからMaterialを作成する。`parameters`は受け付けず、調整には通常のMaterial更新を使う。
