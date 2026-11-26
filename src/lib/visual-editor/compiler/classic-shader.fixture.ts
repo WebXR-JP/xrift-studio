@@ -55,6 +55,13 @@ void main() {
   gl_FragColor = vec4(color * uTint, 1.0);
 }`;
 
+/**
+ * Calls the platform's code check rejects by name in a built world. The check
+ * reads the bundle, so the list is matched against the shipped source text.
+ */
+const REFUSED_BY_THE_PLATFORM_CODE_CHECK =
+  /\b(?:atob|btoa|unescape|decodeURIComponent|eval)\s*\(|\bString\s*\.\s*fromCharCode\b|\bnew\s+Function\b|\bnew\s+DOMParser\b|\binsertAdjacentHTML\b|\bcreateContextualFragment\b|\bdocument\s*\.\s*write(?:ln)?\b/;
+
 function textureAsset(id: string, fileName: string, patch: Partial<TextureAsset> = {}): TextureAsset {
   return {
     id,
@@ -305,6 +312,15 @@ export function runClassicShaderCompilerFixtureAssertions(
     assert(
       !/from\s*["']\.\/[\w-]+\.js["']/.test(content),
       `${name} must import its siblings the way the staged project resolves them`,
+    );
+    // The platform's code check reads the built world and refuses these calls
+    // wherever they stand (no-obfuscation, no-eval, no-new-function,
+    // no-dangerous-dom). A file shipped with every Custom Shader world must not
+    // be the reason a world cannot be published.
+    const refused = REFUSED_BY_THE_PLATFORM_CODE_CHECK.exec(content);
+    assert(
+      !refused,
+      `${name} must not call what the platform's code check refuses: ${refused?.[0]}`,
     );
   }
   // What ships is the editor's own source, with only the import paths changed.

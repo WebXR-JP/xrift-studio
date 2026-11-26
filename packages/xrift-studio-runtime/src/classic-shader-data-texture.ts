@@ -30,14 +30,16 @@ export function readExrSampleType(
   const view = new DataView(buffer);
   if (bytes.length < 8 || view.getUint32(0, true) !== 20000630) return null;
   let offset = 8;
+  // This file is shipped into published worlds, and the platform's code check
+  // refuses a world that builds a string from character codes (it reads that
+  // as obfuscation). EXR header names are ASCII, which a TextDecoder reads as
+  // they are.
+  const decoder = new TextDecoder();
   const readName = (): string | null => {
     let end = offset;
     while (end < bytes.length && bytes[end] !== 0) end += 1;
     if (end >= bytes.length) return null;
-    let name = "";
-    for (let index = offset; index < end; index += 1) {
-      name += String.fromCharCode(bytes[index] ?? 0);
-    }
+    const name = decoder.decode(bytes.subarray(offset, end));
     offset = end + 1;
     return name;
   };
