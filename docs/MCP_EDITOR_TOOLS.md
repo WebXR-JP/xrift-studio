@@ -238,7 +238,22 @@ MCP / API の `mode: "plan"` は Plan の検証までを行い、`status: "plann
 
 テクスチャの uniform は `colorSpace`（`srgb` または `linear`、省略時は変換なし）と `filter`（`linear` または `nearest`、省略時は `linear`）を指定できる。`texture` と `texture-3d` は `wrapS`・`wrapT` に、`texture-3d` はさらに `wrapR` にも `repeat` または `clamp-to-edge` を指定できる。省略時は `texture` が `repeat`、`texture-3d` が `clamp-to-edge` になる。32bit EXR を `filter: "linear"` で読むには端末側の対応が必要なため、数値テーブル用途には `filter: "nearest"` か 16bit EXR を使う。
 
+`texture`と`texture-cube`は`generateMipmaps`と`anisotropy`も持てる。`generateMipmaps: true`は、画像を元より小さく描く場所でMipmaps（縮小表示用の画像）を読む指定である。遠くの面や、細かく繰り返す面のちらつきを抑える。省略時と`false`では元の大きさの画像だけを読む。`filter`は1段階の中での読み方を決め、Mipmapsは隣り合う2段階を常に混ぜる。
+
+| `filter` | `generateMipmaps` | 拡大したとき | 縮小したとき |
+| --- | --- | --- | --- |
+| `linear` | 省略、`false` | 補間する | 元の画像だけを補間して読む |
+| `nearest` | 省略、`false` | 最も近い画素を読む | 元の画像だけから最も近い画素を読む |
+| `linear` | `true` | 補間する | 2段階のMipmapsをそれぞれ補間して読み、混ぜる |
+| `nearest` | `true` | 最も近い画素を読む | 2段階のMipmapsからそれぞれ最も近い画素を読み、混ぜる |
+
+Mipmapsの作り方は画像の形式で決まる。8bitの画像は読み込むときに作る。KTX2はファイルが持つMipmapsを使い、持たないファイルはMipmapsなしで読む。EXRには作らない。浮動小数のMipmapsを作れない端末があり、その端末では黒く描かれるためである。
+
+`anisotropy`は1〜16の整数で、斜めから見た面をぼかさずに描く。省略時は1で、効果はない。2以上は`generateMipmaps: true`と`filter: "linear"`（省略でもよい）の組み合わせでだけ指定できる。それ以外の組み合わせは描画に反映されないため、`CUSTOM_SHADER_INVALID`で拒否する。端末が対応する上限を超えた値は、その上限として扱われる。`texture-3d`は`generateMipmaps`と`anisotropy`を指定できない。
+
 `variants` の各要素は、`side`、`transparent`、`depthWrite`、`defines` に加えて、`blending`（`normal`、`additive`、`multiply`、`subtractive`、省略時は `normal`）と `frustumCulled`（省略時は `true`）を持てる。`blending` の指定は `transparent` の値を自動変更しないため、光や煙を重ねる場合は `transparent: true` と `depthWrite: false` も合わせて指定する。`frustumCulled: false` は、頂点シェーダーでメッシュを元の位置から大きく移動させる場合に指定する。この設定はそのマテリアルを付けたメッシュだけを視錐台カリングの対象から外し、マテリアルを外すと元に戻る。
+
+シーンが決める値は、次の名前のuniformを宣言したシェーダーにだけ渡る。マテリアルに保存した値の代わりに使われる。風は`uWindDirection`（`vector`、2個）、`uWindSpeed`、`uWindTurbulence`（`number`）。主光源と環境光は`uSunDirection`、`uSunColor`、`uAmbientColor`（`vector`、3個）、`uSunIntensity`、`uAmbientIntensity`（`number`）。割り当て先がプリミティブ、Terrain、モデルのどれでも、編集・Play・生成するワールド・Runtime JSONで同じ値になる。時刻は`uTime`などの名前か`animatedTimeUniform`で受け取る。
 
 形式が不正な記述は `CUSTOM_SHADER_INVALID` で拒否し、`details.diagnostics` に `uniforms.<名前>: …` や `variants[0]: …` の形式で原因をすべて返す。存在しないテクスチャ、その種の uniform で扱えないテクスチャ（`texture-3d` や `texture-cube` への KTX2・EXR、およびすべての種類への HDR）、サイズ条件を満たさない画像は `CUSTOM_SHADER_TEXTURE_INVALID` で拒否し、`details.uniforms` に対象の uniform 名、`details.diagnostics` に原因を返す。テクスチャは先に `import_texture_asset` で取り込み、`get_texture_asset` でサイズを確認してから指定する。いずれのエラーでもマテリアルは変更しない。
 

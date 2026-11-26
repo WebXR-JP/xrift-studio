@@ -13,12 +13,14 @@ import {
   FrontSide,
   HalfFloatType,
   LinearFilter,
+  LinearMipmapLinearFilter,
   Matrix3,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MultiplyBlending,
   NearestFilter,
+  NearestMipmapLinearFilter,
   NoColorSpace,
   NormalBlending,
   RGBAFormat,
@@ -104,6 +106,7 @@ export async function runClassicShaderRuntimeFixtureAssertions(): Promise<void> 
   assertVariantRenderState();
   assertValueUniformKinds();
   assertTextureUniformSamplers();
+  assertMipLevelsAreRead();
   assertVolumeTextures();
   assertCubeTextures();
   assertFrustumCullingFollowsTheMaterial();
@@ -347,6 +350,7 @@ function assertTextureUniformSamplers(): void {
       plain.generateMipmaps === false &&
       plain.magFilter === LinearFilter &&
       plain.minFilter === LinearFilter &&
+      plain.anisotropy === 1 &&
       plain.wrapS === RepeatWrapping &&
       plain.wrapT === RepeatWrapping &&
       plain.flipY === true,
@@ -356,7 +360,8 @@ function assertTextureUniformSamplers(): void {
     tuned.colorSpace === SRGBColorSpace &&
       tuned.generateMipmaps === true &&
       tuned.magFilter === NearestFilter &&
-      tuned.minFilter === NearestFilter &&
+      // Mip levels that are built are read: see assertMipLevelsAreRead.
+      tuned.minFilter === NearestMipmapLinearFilter &&
       tuned.wrapS === ClampToEdgeWrapping &&
       tuned.wrapT === ClampToEdgeWrapping,
     "the options written on the uniform must decide its sampler",
@@ -424,6 +429,111 @@ function assertTextureUniformSamplers(): void {
       dataUse.magFilter === NearestFilter,
     "float data must reach the sampler unflipped, unconverted and in its own precision",
   );
+}
+
+/**
+ * `generateMipmaps: true` has to mean that the mip levels are read. Building
+ * them and leaving the minification filter on the full-size picture, as the
+ * builder once did, costs the memory and still shimmers at a distance.
+ */
+function assertMipLevelsAreRead(): void {
+  const picture = pictureTexture(64, 64);
+  // A sampler setting of the Asset itself, which is for glTF surfaces.
+  picture.anisotropy = 4;
+  const faces = Array.from({ length: 6 }, () => pictureTexture(16, 16));
+  const level = (side: number) => ({
+    data: new Uint8Array(16),
+    width: side,
+    height: side,
+  });
+  const withLevels = new CompressedTexture([level(8), level(4), level(2)], 8, 8);
+  const withoutLevels = new CompressedTexture([level(8)], 8, 8);
+  const half = new DataTexture(new Uint16Array(4 * 4), 2, 2, RGBAFormat, HalfFloatType);
+  const float = new DataTexture(new Float32Array(4 * 4), 2, 2, RGBAFormat, FloatType);
+  const cubeFaces = faces.map((_face, index) => ({ textureAssetId: `face-${index}` }));
+  const material = createClassicShaderMaterial(
+    shaderWith({
+      uniforms: {
+        uPlain: { kind: "texture", textureAssetId: "picture" },
+        uPlainNearest: { kind: "texture", textureAssetId: "picture", filter: "nearest" },
+        uOff: { kind: "texture", textureAssetId: "picture", generateMipmaps: false, anisotropy: 1 },
+        uMipped: { kind: "texture", textureAssetId: "picture", generateMipmaps: true },
+        uMippedNearest: { kind: "texture", textureAssetId: "picture", generateMipmaps: true, filter: "nearest" },
+        uSlanted: { kind: "texture", textureAssetId: "picture", generateMipmaps: true, anisotropy: 8 },
+        uEncoded: { kind: "texture", textureAssetId: "ktx2-levels", generateMipmaps: true, anisotropy: 16 },
+        uEncodedUnused: { kind: "texture", textureAssetId: "ktx2-levels" },
+        uEncodedNone: { kind: "texture", textureAssetId: "ktx2-single", generateMipmaps: true },
+        uHalf: { kind: "texture", textureAssetId: "half", generateMipmaps: true },
+        uFloat: { kind: "texture", textureAssetId: "float", generateMipmaps: true, filter: "nearest" },
+        uSky: { kind: "texture-cube", faces: cubeFaces },
+        uSkyMipped: { kind: "texture-cube", faces: cubeFaces, generateMipmaps: true, anisotropy: 4 },
+        uSkyMippedNearest: { kind: "texture-cube", faces: cubeFaces, generateMipmaps: true, filter: "nearest" },
+      },
+    }),
+    {
+      textures: {
+        picture,
+        "ktx2-levels": withLevels,
+        "ktx2-single": withoutLevels,
+        half,
+        float,
+        ...Object.fromEntries(faces.map((face, index) => [`face-${index}`, face])),
+      },
+    },
+  );
+  const sampler = (name: string) => {
+    const texture = material.uniforms[name]?.value as Texture;
+    return [texture.generateMipmaps, texture.magFilter, texture.minFilter, texture.anisotropy].join();
+  };
+  const expectSampler = (
+    name: string,
+    expected: [boolean, number, number, number],
+    message: string,
+  ) =>
+    assert(
+      sampler(name) === expected.join(),
+      `${message}; ${name} got ${sampler(name)}, expected ${expected.join()}`,
+    );
+
+  // Documents that ask for nothing are sampled exactly as before.
+  expectSampler("uPlain", [false, LinearFilter, LinearFilter, 1],
+    "a texture uniform without mip levels must read the full-size picture only");
+  expectSampler("uPlainNearest", [false, NearestFilter, NearestFilter, 1],
+    "a nearest texture uniform without mip levels must read the full-size picture only");
+  expectSampler("uOff", [false, LinearFilter, LinearFilter, 1],
+    "generateMipmaps false and anisotropy 1 must be the same as leaving both out");
+  expectSampler("uSky", [false, LinearFilter, LinearFilter, 1],
+    "a cube map without mip levels must read the full-size faces only");
+  assert(
+    picture.anisotropy === 4,
+    "the shared texture must keep its own sampler, and must not lend it to a uniform",
+  );
+
+  // The pairing: filter picks the texels inside a level, and the two closest
+  // levels are blended.
+  expectSampler("uMipped", [true, LinearFilter, LinearMipmapLinearFilter, 1],
+    "generateMipmaps with a linear filter must read the mip levels, blended");
+  expectSampler("uMippedNearest", [true, NearestFilter, NearestMipmapLinearFilter, 1],
+    "generateMipmaps with a nearest filter must read the mip levels, blended, and stay nearest inside a level");
+  expectSampler("uSlanted", [true, LinearFilter, LinearMipmapLinearFilter, 8],
+    "anisotropy must reach the sampler that reads the mip levels");
+  expectSampler("uSkyMipped", [true, LinearFilter, LinearMipmapLinearFilter, 4],
+    "a cube map must read its mip levels and take its anisotropy the same way");
+  expectSampler("uSkyMippedNearest", [true, NearestFilter, NearestMipmapLinearFilter, 1],
+    "a nearest cube map must read its mip levels the same way");
+
+  // Where the levels come from depends on what the picture is.
+  expectSampler("uEncoded", [false, LinearFilter, LinearMipmapLinearFilter, 16],
+    "a compressed texture must read the mip levels its file holds, without asking WebGL to build any");
+  expectSampler("uEncodedUnused", [false, LinearFilter, LinearFilter, 1],
+    "a compressed texture must not read its mip levels unless the uniform asks");
+  expectSampler("uEncodedNone", [false, LinearFilter, LinearFilter, 1],
+    "a compressed texture without mip levels must not be given a filter that needs them: it would read black");
+  expectSampler("uHalf", [false, LinearFilter, LinearFilter, 1],
+    "float data must never be mip-filtered: WebGL builds float mip levels only with optional extensions");
+  expectSampler("uFloat", [false, NearestFilter, NearestFilter, 1],
+    "32-bit float data must stay a table read texel by texel");
+  material.dispose();
 }
 
 function assertVolumeTextures(): void {

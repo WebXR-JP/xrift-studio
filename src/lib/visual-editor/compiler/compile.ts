@@ -66,18 +66,14 @@ import {
   classicShaderTextureAssetIds,
   validateClassicR3fMaterialShader,
   type ClassicR3fMaterialShader,
-  type ClassicR3fShaderUniform,
 } from "../custom-shader-contract";
 import {
   resolveSkyShaderMaterial,
   skyShaderDrivenUniforms,
   skyShaderTextureUniformNames,
 } from "../sky-shader";
-import {
-  lightingDrivenUniforms,
-  resolveSceneLighting,
-} from "../lighting-contract";
-import { resolveSceneWind, windDrivenUniforms } from "../wind-contract";
+import { resolveSceneLighting } from "../lighting-contract";
+import { resolveSceneWind } from "../wind-contract";
 import {
   TERRAIN_GRASS_MAX_INSTANCES,
   getTerrainGrassType,
@@ -203,6 +199,10 @@ import {
 } from "./types";
 import { compileXriftComponent } from "./xrift-component-registry";
 import { compileRuntimeManifest } from "./runtime-manifest";
+import {
+  publishedClassicShader,
+  publishedSceneClassicShader,
+} from "./classic-shader-publish";
 import type { XriftRuntimeDecoderPaths } from "../../../../packages/xrift-studio-runtime/src/schema";
 import {
   VENDOR_BUNDLES,
@@ -237,6 +237,12 @@ type CompileContext = {
   supportDeclarations: Map<string, string>;
   /** Names the entry imports from the shared Custom Shader Material module. */
   classicShaderImports: Set<string>;
+  /**
+   * The descriptor each Custom Shader Material worn by a mesh is published
+   * with, by Material Asset id. A Material is emitted once, for the first
+   * Entity that wears it, and this is that descriptor.
+   */
+  publishedClassicShaders: Map<string, ClassicR3fMaterialShader>;
   runtimeOverlayFiles: Map<string, CompilerOverlayFile>;
   /** Per compilation: expanded nodes share the same material IDs and resolvers. */
   materialComponentNames: Map<string, string>;
@@ -387,6 +393,9 @@ export function compileVisualProject(
   if (outputMode === "classic-runtime") {
     // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
     // feature parity. Runtime export emits a thin, target-neutral adapter.
+    // The pass also says which descriptor each Custom Shader Material is
+    // published with, and the manifest carries exactly those.
+    const publishedClassicShaders = new Map<string, ClassicR3fMaterialShader>();
     if (resolvedEntryScene) {
       generateComponentSource(
         documents.project.projectKind,
@@ -395,6 +404,8 @@ export function compileVisualProject(
         assetCopyPlan,
         diagnostics,
         scriptPlan.modules,
+        undefined,
+        publishedClassicShaders,
       );
     }
     const runtimeManifest = compileRuntimeManifest(
@@ -407,6 +418,7 @@ export function compileVisualProject(
       // Named only when the world actually carries a font file, and relative to
       // the manifest, exactly like the decoder directories.
       textFontCopyPlan.length > 0 ? PUBLISHED_RUNTIME_ASSET_BASE : undefined,
+      publishedClassicShaders,
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
     runtimeManifestFile = compilerFile(
@@ -1409,6 +1421,7 @@ function generateComponentSource(
   diagnostics: CompilerDiagnostic[],
   scriptModules: ReadonlyMap<string, EmittedScriptModule> = new Map(),
   runtimeOverlayFiles: Map<string, CompilerOverlayFile> = new Map(),
+  publishedClassicShaders: Map<string, ClassicR3fMaterialShader> = new Map(),
 ): string {
   const context: CompileContext = {
     projectKind,
@@ -1427,6 +1440,7 @@ function generateComponentSource(
     threeTypeImports: new Set(),
     supportDeclarations: new Map(),
     classicShaderImports: new Set(),
+    publishedClassicShaders,
     runtimeOverlayFiles,
     materialComponentNames: new Map(),
     materialInjectionNames: new Map(),
@@ -1677,50 +1691,6 @@ function skyMeshPlacementProps(
       position={[${skybox.meshPosition.map(formatNumber).join(", ")}]}
       rotation={[${meshRotation}]}
       scale={[${skybox.meshScale.map(formatNumber).join(", ")}]}`;
-}
-
-/**
- * A number as the generated world receives it: the viewport's value, with the
- * two values JSON cannot carry (a non-finite number, negative zero) as zero.
- */
-function publishedUniformNumber(value: number): number {
-  return Number.isFinite(value) && !Object.is(value, -0) ? value : 0;
-}
-
-/**
- * The descriptor the generated world draws: the authored shader with the
- * uniforms the Scene drives replaced by the Scene's values.
- *
- * Authoring references (the preview Model, the Shader Assets the GLSL was
- * read from) are left out: the world draws from the GLSL itself.
- */
-function publishedClassicShader(
-  shader: ClassicR3fMaterialShader,
-  driven: ReadonlyMap<
-    string,
-    { kind: "number"; value: number } | { kind: string; value: readonly number[] }
-  >,
-): ClassicR3fMaterialShader {
-  const uniforms: Record<string, ClassicR3fShaderUniform> = {};
-  for (const [name, uniform] of Object.entries(shader.uniforms)) {
-    const override = driven.get(name);
-    uniforms[name] = !override
-      ? uniform
-      : typeof override.value === "number"
-        ? { kind: "number", value: publishedUniformNumber(override.value) }
-        : { kind: "vector", value: override.value.map(publishedUniformNumber) };
-  }
-  return {
-    kind: "classic-r3f",
-    sourceModulePath: shader.sourceModulePath,
-    vertexShader: shader.vertexShader,
-    fragmentShader: shader.fragmentShader,
-    uniforms,
-    variants: shader.variants,
-    ...(shader.animatedTimeUniform
-      ? { animatedTimeUniform: shader.animatedTimeUniform }
-      : {}),
-  };
 }
 
 /**
@@ -4913,33 +4883,12 @@ function registerClassicR3fMaterialComponent(
   context.classicShaderImports.add("XriftClassicShaderMaterial");
   context.classicShaderImports.add("type XriftClassicShader");
 
-  // Wind is authored on the Scene, not on the Material, so a shader that opts
-  // into the wind contract gets the scene's values rather than whatever was
-  // saved in its own uniforms.
-  const entityWind = entity.components.find(
-    (component): component is Extract<typeof component, { type: "vegetation-wind" }> =>
-      component.type === "vegetation-wind",
-  );
-  const sceneSettings = resolveSceneSettings(context.scene.settings);
-  const published = publishedClassicShader(
-    shader,
-    new Map<
-      string,
-      { kind: "number"; value: number } | { kind: string; value: readonly number[] }
-    >([
-      ...windDrivenUniforms(
-        shader,
-        resolveSceneWind(sceneSettings.vegetation, entityWind),
-      ).map((entry) => [entry.name, entry] as const),
-      // The scene's key light, supplied the same way the wind is, so a
-      // published world shades its official Materials from the same light the
-      // editor did. A uniform both contracts name follows the light.
-      ...lightingDrivenUniforms(
-        shader,
-        resolveSceneLighting(context.scene, sceneSettings.ambient),
-      ).map((entry) => [entry.name, entry] as const),
-    ]),
-  );
+  // Wind and the key light are authored on the Scene, not on the Material, so
+  // a shader that opts into those contracts gets the Scene's values rather
+  // than whatever was saved in its own uniforms. The Runtime JSON manifest
+  // carries the descriptor recorded here, so both outputs draw the same.
+  const published = publishedSceneClassicShader(shader, context.scene, entity);
+  context.publishedClassicShaders.set(asset.id, published);
 
   // A Texture Asset the world could not draw is reported here, with the same
   // wording the Inspector and the MCP tools use for it.
