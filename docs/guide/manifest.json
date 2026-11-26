@@ -843,15 +843,18 @@
     },
     {
       "slug": "custom-shaders",
+      "reviewedVersion": "1.0.20",
+      "reviewedOn": "2026-11-26",
       "title": "GLSLでマテリアルを編集する",
       "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。",
       "group": "materials-advanced",
       "file": "custom-shaders.md",
-      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR attribute 属性 インスタンス instancing EXT_mesh_gpu_instancing",
       "related": [
         "materials",
         "sky-and-water",
-        "textures"
+        "textures",
+        "assets"
       ]
     },
     {

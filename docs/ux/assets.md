@@ -348,6 +348,7 @@
 
 - GLSL元データ、uniform、variantの編集中はマテリアルのassetSelectionと参照オブジェクトを維持し、連続入力を一つの素材更新へまとめる。処理中の保存・MCP更新は同じリビジョンを消費し、古いMCP要求データは`STALE_REVISION`で止める。
 - シーンではカスタムシェーダーを実際のShaderMaterialとしてメッシュへ適用し、基本形状と3Dモデルのマテリアル枠で同じuniform・attribute・時間uniform契約を使う。テクスチャuniformは明示されたテクスチャだけを読み込む。
+- 3Dモデルへ割り当てたカスタムシェーダーは、メッシュのattributeを名前で読む。glTFの独自attributeは小文字の名前になる。`EXT_mesh_gpu_instancing`の独自attributeはインスタンスごとの値として届き、glTFの名前と小文字の名前のどちらでも読める。編集・Play・公開は同じ読み込み処理を使う。仕様は[3Dモデルの読み込み仕様](../MODEL_IMPORT_CONTRACT.md#インスタンスごとの属性)にある。
 - MCPの更新は`void main()`、uniform型、variant、元データ長を検証してから確定する。設定の途中入力は診断対象として保持し、コンパイル / 動作確認ではそのマテリアルだけをPBRによる代替表示または公開を止める診断へ分離する。
 
 ### 成功時
