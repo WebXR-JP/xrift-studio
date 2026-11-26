@@ -1,4 +1,5 @@
 import { CATALOG_SAMPLE_MODELS } from "./catalog-sample-models";
+import { FOLIAGE_RECIPE_MODELS } from "./foliage-recipe-models";
 /**
  * GLB models bundled with the app for `SceneRecipe` "model" parts.
  *
@@ -39,6 +40,7 @@ export type BuiltinRecipeModelDefinition = {
 
 export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
   ...CATALOG_SAMPLE_MODELS,
+  ...FOLIAGE_RECIPE_MODELS,
   {
     modelId: "torch",
     assetId: "model-torch-12823625f7a4",

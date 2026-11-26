@@ -293,6 +293,8 @@ Custom Shader をモデルへ `set_material` で割り当てると、頂点シ�
 
 `list_scene_recipes` は焚き火・松明・木・岩・雪・噴水・柱・階段・井戸・ベンチ・収録スタジオといった出来合いの 3D セット一覧を返す。配置には `local-asset` サーフェスの `apply_scene_recipe` を使う。各セットはライト・パーティクル・マテリアルが互いに調整されたサブツリーであり、同じものをプリミティブから組み上げると十数回の呼び出しが必要なうえ見栄えも劣る。`note` には配置後の残作業が記されているため、見落とさず確認すること。
 
+風にそよぐ木には、広葉樹（`scene-recipe.foliage-broadleaf`）、庭木（`scene-recipe.foliage-garden-tree`）、低木（`scene-recipe.foliage-shrub`）と、それぞれの軽量版（`scene-recipe.foliage-broadleaf-light`、`scene-recipe.foliage-garden-tree-light`、`scene-recipe.foliage-shrub-light`）がある。初回の配置では木のモデルに加え、カスタムシェーダーのマテリアル `foliage-shader-broadleaf-material` と、葉・樹皮のテクスチャを 2 枚追加する。どの木も同じマテリアルを使うため、2 本目以降はモデルだけが増える。軽量版は葉の束が約半分で、たくさん並べる木や離れて見る木に向く。葉の色や揺れの強さは `get_custom_shader` で確認し、`update_custom_shader` で uniform を変更する。変更はそのマテリアルを使うすべての木に反映される。風や光の uniform（`uWindDirection`、`uSunDirection` など）はシーンが設定するため、手動で値を入れても次の描画で上書きされる。風は `update_scene_settings` の `vegetation` で変更する。
+
 「しかけ・チュートリアル」カテゴリのセットは、形状に加えて音源とノードグラフまで組み込んだ状態で配置される。`behaviours` には操作時に起きる挙動が 1 本ずつ記されており、`lesson` にはそのセットが解説する手順が入っている。「押すと音が鳴る」「押すと灯りが点く」「開いて自動で閉じる」といった仕掛けを、`add_component` と `create_interactivity_asset` を何度も呼んで一から組み直す必要はない。配置されるのは通常の Interactable・Audio Source・グラフ実行 Component であるため、配置後は通常のツールでそのまま編集できる。
 
 `get_entity_bounds` は位置・回転・スケールではなく、実際の**大きさ（バウンディングボックス）**を返す。`world` は既定で子孫を含めた軸並行バウンディングボックス（AABB）を返し、`local` は自身のメッシュ本来のサイズ範囲（extent）を返す。回転している子 Entity は 8 頂点を変換して包含する箱にするため、重なり判定が安全側になる。サイズ範囲を解決できないメッシュ（メタデータのない旧形式の 3D モデルなど）は合算範囲から黙って除外せず、`unmeasuredEntityIds` に出力することで「サイズが小さい」のと「不明」を明確に区別する。

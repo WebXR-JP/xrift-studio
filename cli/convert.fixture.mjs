@@ -36,6 +36,7 @@ import {
   runWaterShaderFixtureAssertions,
   runUnityPackageImportFixture,
 } from "../src/lib/visual-editor/fixtures.ts";
+import { runFoliageShaderFixtureAssertions } from "../src/lib/visual-editor/foliage-shader.fixture.ts";
 import { runSceneLoadStateFixtureAssertions } from "../src/components/visual-editor/scene-load-state.fixture.ts";
 import { runMeshColliderGeometryFixtureAssertions } from "../src/lib/visual-editor/mesh-collider-geometry.fixture.ts";
 import { runMeshCollisionActionsFixtureAssertions } from "../src/lib/visual-editor/mesh-collision-actions.fixture.ts";
@@ -517,6 +518,7 @@ try {
     ["gizmo snap", runGizmoSnapFixtureAssertions],
     ["wind contract", runWindContractFixtureAssertions],
     ["water shader", runWaterShaderFixtureAssertions],
+    ["foliage shader", runFoliageShaderFixtureAssertions],
     ["unity package import", runUnityPackageImportFixture],
     ["editor drag data", runEditorDragDataFixture],
     ["editor library drag", runEditorLibraryDragFixture],

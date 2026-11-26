@@ -1,3 +1,4 @@
+import { FOLIAGE_SHADER_CATALOG } from "./foliage-shader-catalog";
 import { SKY_SHADER_CATALOG } from "./sky-shader-catalog";
 import { WATER_SHADER_CATALOG } from "./water-shader-catalog";
 import { TERRAIN_SURFACE_CATALOG } from "./terrain-surface-catalog";
@@ -50,18 +51,25 @@ const CATALOG_LABELS: Map<string, Map<string, ShaderUniformLabel>> = new Map([
   ...collectCatalog(SKY_SHADER_CATALOG),
   ...collectCatalog(WATER_SHADER_CATALOG),
   ...collectCatalog(TERRAIN_SURFACE_CATALOG),
+  ...collectCatalog(FOLIAGE_SHADER_CATALOG),
 ]);
 
 /**
- * Uniforms the wind contract and the Studio runtime drive on the author's
- * behalf. Naming them matters more than the others: an author who edits them
- * by hand is fighting a value that is about to be overwritten every frame.
+ * Uniforms the wind contract, the lighting contract and the Studio runtime
+ * drive on the author's behalf. Naming them matters more than the others: an
+ * author who edits them by hand is fighting a value that is about to be
+ * overwritten every frame.
  */
 const DRIVEN_UNIFORM_LABELS: Readonly<Record<string, ShaderUniformLabel>> = {
   uTime: { label: "時間", hint: "毎フレーム自動で進みます" },
   uWindDirection: { label: "風向き", hint: "シーンの風から自動で入ります" },
   uWindSpeed: { label: "風速", hint: "シーンの風から自動で入ります" },
   uWindTurbulence: { label: "風の乱れ", hint: "シーンの風から自動で入ります" },
+  uSunDirection: { label: "光の向き", hint: "シーンのライトから自動で入ります" },
+  uSunColor: { label: "光の色", hint: "シーンのライトから自動で入ります" },
+  uSunIntensity: { label: "光の強さ", hint: "シーンのライトから自動で入ります" },
+  uAmbientColor: { label: "環境光の色", hint: "シーンの環境光から自動で入ります" },
+  uAmbientIntensity: { label: "環境光の強さ", hint: "シーンの環境光から自動で入ります" },
   uCenter: { label: "中心", hint: "空の設定から自動で反映されます。" },
   uRotation: { label: "回転", hint: "空の設定から自動で反映されます。" },
   uExposure: { label: "露出", hint: "空の設定から自動で反映されます。" },
