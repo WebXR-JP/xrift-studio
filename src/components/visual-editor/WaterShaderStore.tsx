@@ -16,6 +16,7 @@ import {
   waterShaderCostLabel,
   applyWaterShaderParameters,
   defaultWaterShaderParameterValues,
+  isFlowingWaterShader,
   waterShaderCategoryLabel,
   type WaterShaderCatalogCategory,
   type WaterShaderCatalogEntry,
@@ -91,6 +92,8 @@ export function WaterShaderStore({
     () => (selected ? applyWaterShaderParameters(selected, values) : undefined),
     [selected, values],
   );
+  // A river runs in still air, so what the shelf says about the wind differs.
+  const flowing = selected ? isFlowingWaterShader(selected.shader) : false;
   const modified = useMemo(() => {
     if (!selected) return false;
     const defaults = defaultWaterShaderParameterValues(selected);
@@ -149,7 +152,7 @@ export function WaterShaderStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Water Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                外洋・浅瀬・荒天・夜光・絵画調。波と泡の表現から選べます
+                外洋・浅瀬・川・荒天・夜光・絵画調。波と泡の表現から選べます
               </p>
             </div>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700">
@@ -262,7 +265,9 @@ export function WaterShaderStore({
                 プレビューに風を適用
               </label>
               <p className="text-[10px] leading-4 text-slate-500">照明と水底は見本です。シーン設定は変更しません。</p>
-              {wind.speed <= 0 ? <Notice tone="warning" text="シーンの風は停止中です。追加後の水面を動かすには、シーン設定の風を有効にしてください。" /> : null}
+              {wind.speed <= 0 ? <Notice tone={flowing ? "neutral" : "warning"} text={flowing
+                ? "シーンの風は停止中です。流れは風がなくても動きます。風で立つさざ波も加えるには、シーン設定の風を有効にしてください。"
+                : "シーンの風は停止中です。追加後の水面を動かすには、シーン設定の風を有効にしてください。"} /> : null}
             </div>
             <div>
               <div className="flex items-start justify-between gap-2">
@@ -365,6 +370,7 @@ export function WaterShaderStore({
             <Notice text="板や地形に割り当てて使います。" />
             <Notice text={selected.notes} />
             {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は「演出」で岸の位置・方角・幅を調整します。岩や地形には自動で合わせません。" /> : null}
+            {flowing ? <Notice tone="warning" text="流れは「演出」で速さ・向き・川幅・深さを調整します。割り当てたメッシュの中心線に沿ってまっすぐ流れ、曲がった川・岩・地形には自動で合わせません。" /> : null}
             <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode)を移植しています。" />
 
           </div>

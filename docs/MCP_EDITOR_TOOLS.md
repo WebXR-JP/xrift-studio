@@ -239,6 +239,10 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 パラメーターと範囲と既定値を含む。`create_material_from_preset`はマテリアル
 を作る。`nextStep`を返す。空はシーンsettingsのskyboxが指して初めて空に
 なる。水は板ポリへ割り当てて初めて水面になる。作っただけでは終わらない。
+水のうち`category: "river"`の項目は流れる川で、向きと中心線を割り当て先のメッシュから取る。
+`nextStep`は細長い水平のPlaneへ割り当てること、Entityの回転で向きを決めること、
+`uChannelWidth`をPlaneの幅に合わせることを返す。川の流れは`uFlowSpeed`で進み、
+シーンの風が止まっていても動く。ほかの水は風が止まると動かない。違いは各項目の`notes`にも入る。
 空の背景の各項目は`qualityOptions`に軽量・標準・高精細のvariantsと説明を返す。
 作成後の`update_custom_shader`へ`patch.variants`として渡すとUniformを保って品質を変えられる。
 独自variantがある場合は`get_custom_shader`で取得し、品質用definesだけを統合する。
