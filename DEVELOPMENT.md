@@ -1,25 +1,26 @@
 # 開発ガイド
 
-XRift Studioをソースからビルド・改変するための開発ガイドです。アプリの使い方は[README.md](./README.md)を参照してください。
+XRift Studio をソースコードからビルド・開発するためのガイドです。アプリの使い方は [README.md](./README.md) を参照してください。
 
 ## 必要な環境
 
-- **Node.js** 22.19.0以上（Pi SDKの要件。同梱する制作ツールは24系LTS）
-- [Rust](https://www.rust-lang.org/learn/get-started)のstable版
-- OS: Windows 10/11 / macOS 12+ / Linux
+- **Node.js** 22.19.0 以上（Pi SDK の要件。アプリに同梱する制作ツールは 24 系 LTS）
+- **pnpm** 11 以上
+- [Rust](https://www.rust-lang.org/learn/get-started)（stable 版）
+- 対応 OS: Windows 10/11、macOS 12 以降、Linux
 
-### Windows 追加要件
+### Windows で追加で必要なもの
 
-- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（"Desktop development with C++" ワークロード）
-- WebView2 Runtime（Windows 11は標準搭載）
+- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（「Desktop development with C++」ワークロード）
+- WebView2 Runtime（Windows 11 は標準搭載）
 
-### macOS 追加要件
+### macOS で追加で必要なもの
 
 ```bash
 xcode-select --install
 ```
 
-### Linux 追加要件（Ubuntu 22.04 の例）
+### Linux で追加で必要なもの（Ubuntu 22.04 の例）
 
 ```bash
 sudo apt update
@@ -33,32 +34,34 @@ sudo apt install \
   build-essential
 ```
 
-## 起動（開発モード）
+## 開発モードでの起動
 
 ```bash
 pnpm install
 pnpm tauri:dev
 ```
 
-依存管理にはpnpmを使います。`pnpm-lock.yaml`を唯一のロックファイルとして更新し、CIでは`pnpm install --frozen-lockfile`で再現性を確認します。`.npmrc`のTakumi Guard設定を、依存の導入と公開用shellの生成で引き継ぎます。
+パッケージ管理には pnpm を使います。ロックファイルは `pnpm-lock.yaml` に統一し、CI では `pnpm install --frozen-lockfile` で依存関係の再現性を検証します。`.npmrc` の Takumi Guard 設定は、通常の依存インストールと公開用ランタイムシェルの生成の両方に適用されます。
 
-## UX の確認
+## UX と動作確認の基準
 
-機能を追加・変更したら、[UX原則](./docs/UX_PRINCIPLES.md)に沿って実画面を確認してください。作成物や起動した画面を、操作後にすぐ開けることも確認します。
+機能を追加・変更したときは、[UX 原則](./docs/UX_PRINCIPLES.md) に沿って実際の画面で次の 5 点を確認してください。
 
-1. 操作前に、現在の状態と主操作がひと目で分かる。
-2. 実行中に、処理中であることと二重操作できないことが分かる。
-3. 成功後に、作成物・起動URL・公開URLなど、次の目的地をすぐ開ける。
-4. 失敗後に、ログまたは再試行などの復帰手段が分かる。
-5. 一覧へ戻ったときに、変更結果と新規作成の入口が見つかる。
+1. 操作前に、現在の状態とメインの操作がひと目で分かること。
+2. 処理中は実行中であることが伝わり、二重実行を防げること。
+3. 成功後に、作成したプロジェクトや起動 URL・公開 URL など、次の目的地へすぐ進めること。
+4. 失敗時に、ログの確認や再試行などのリカバリー手段が分かること。
+5. 一覧へ戻ったとき、変更結果と新規作成の入口が迷わず見つかること。
 
-日常の検証では、型チェック、Rustの`cargo check`、変更した機能の回帰テストと操作を確認してください。文書だけの変更では内容と参照を確認します。操作の許可と完了条件は[共通ガイド](./AGENT.md#意思決定と完了)に従ってください。依頼済みのローカルビルドは追加の許可を求めず進め、公開・配布には別途その操作の許可を確認します。
+日常の開発では、型チェック、Rust の `cargo check`、変更した機能の回帰テストおよび画面確認を行います。ドキュメントのみの変更であれば、内容の正確さとリンク切れを確認します。作業の進め方や完了条件は [開発・作業ガイド](./AGENT.md#作業の進め方と完了条件) に従ってください。
 
-手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に`pnpm e2e:test e2e/<対象>.spec.ts`で実行し、全件は`pnpm e2e:test`で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前E2E](./docs/RELEASE_E2E.md) を参照してください。
+手動実行の Release ワークフローでは、OS ごとのビルド前に主要な 9 本の E2E テストを実行します。個別機能の回帰確認は `pnpm e2e:test e2e/<対象>.spec.ts`、全件実行は `pnpm e2e:test` です。テスト範囲や失敗時の確認手順は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
-### Piによる制作の確認
+### Pi SDK による制作チャットの確認
 
-Studio内の制作チャットはPi SDKを使い、正式なEditorツールを呼びます。旧JSONプランの解析・適用、操作カタログ、独自のScene要約・再計画・入力アーカイブは削除しました。会話・Plan・使用量・進捗はPiの共通プロトコルと履歴を使います。SDKの実行ループ、OpenAI Responsesの通信、Editorへの反映、保存、停止を次で確認できます。モデル応答とnative IPCだけをテスト用に置き換え、実アカウントへの通信は行いません。
+アプリ内の制作チャットは Pi SDK を使い、Studio の公式 Editor ツールを呼び出します。従来の JSON 一括プラン生成や独自の再計画ループは廃止し、会話・Plan・トークン使用量・進捗管理はすべて Pi の共通プロトコルと履歴で扱っています。
+
+SDK の実行ループ、OpenAI Responses API とのやり取り、エディターへの反映・保存・停止は次のテストで確認できます（モデル応答とネイティブ IPC のみをテスト用に差し替えており、実際のアカウントへの通信は発生しません）。
 
 ```bash
 pnpm pi:test
@@ -66,35 +69,37 @@ node --test scripts/chatgpt-authoring-host.test.mjs scripts/chatgpt-sessions.tes
 pnpm e2e:test e2e/chatgpt-pi-authoring.spec.ts
 ```
 
-`pnpm pi:prepare`は導入済みのlockfileに一致する依存を配布リソースへコピーします。Tauriの開発・配布コマンドは、MCP sidecarとアプリ本体のビルド前にこの処理を自動で呼び出します。開発時にもTauriが`src-tauri/resources/pi`の存在を検査するため、SDKのコンパイルだけでは起動準備が完了しません。MCP sidecar単体の準備ではアプリ用の配布リソースを検査対象から外し、未生成の状態でもビルドできます。アプリ本体ではリソースの検査・同梱を維持します。実アカウントでの認証・推論とOS別アプリの起動は別途確認してください。詳しい経路は[Pi SDKによるStudio制作](./docs/CHATGPT_AUTHORING.md)を参照してください。
+`pnpm pi:prepare` はロックファイルに一致する依存関係を配布リソース（`src-tauri/resources/pi`）へコピーします。Tauri の開発・ビルドコマンドは、MCP sidecar とアプリ本体のビルド前に自動でこのスクリプトを実行します。開発時にも Tauri が `src-tauri/resources/pi` の存在をチェックするため、SDK をコンパイルしただけでは起動できません（MCP sidecar 単体のビルド時のみ、このチェックを除外しています）。実アカウントでの認証・推論と各 OS での起動は別途確認してください。全体の仕組みは [Pi SDK による Studio 制作](./docs/CHATGPT_AUTHORING.md) にまとめています。
 
-### 導入済みBlenderからの実GLB取り込み確認
+### 導入済み Blender を使った実 GLB 取り込みテスト
 
-通常のnativeテストはBlenderの導入を要求しません。実機確認では`XRIFT_TEST_BLENDER=1`を指定し、`blender_modeling::tests::installed_blender_exports_real_geometry_pbr_and_studio_axes`を実行します。新規の隔離プロジェクトで実GLBと`.blend`を作り、形状・PBR Material・Studioの軸と複合回転を検査し、作業用プロジェクトだけを削除します。
+通常のネイティブテストでは Blender は不要です。ローカルの Blender を使った確認を行う場合は、`XRIFT_TEST_BLENDER=1` を付けて `blender_modeling::tests::installed_blender_exports_real_geometry_pbr_and_studio_axes` を実行します。テスト用に隔離した新規プロジェクトで実際の GLB と `.blend` を生成し、形状・PBR マテリアル・軸と複合回転を検証したあと、作業用プロジェクトのみ削除します。
 
-`XRIFT_TEST_BLENDER_OUTPUT`にリポジトリ直下の`node_modules/.cache/chatgpt-blender-model/fixture.glb`の絶対パスを指定すると、確認した実GLBと生成仕様の`fixture.json`を残します。保存先はこの固定cache内に限り、別の内容で上書きしません。続けて`node --test scripts/chatgpt-modeling.test.mjs`と`pnpm e2e:test e2e/chatgpt-modeling.spec.ts`を実行すると、通常のAssets取り込みとScene・Playの実描画、保存後の再表示を確認できます。実GLBがない環境では、その実データを使う試験だけをSKIPします。ブラウザ試験のnative transportと推論応答は隔離fixtureで、本物のGLB bytesと通常の取り込み・描画処理を使います。
+`XRIFT_TEST_BLENDER_OUTPUT` にリポジトリ直下の `node_modules/.cache/chatgpt-blender-model/fixture.glb` の絶対パスを指定すると、生成した GLB と仕様ファイル `fixture.json` をそのキャッシュ先に保存します。続いて `node --test scripts/chatgpt-modeling.test.mjs` と `pnpm e2e:test e2e/chatgpt-modeling.spec.ts` を実行すると、Assets への取り込みから Scene・Play での描画、保存後の再表示まで通して確認できます（実 GLB がない環境では、そのデータを使うテストのみスキップされます）。
 
-### 実Classic書き出しの描画確認
+### Classic プロジェクト書き出しの描画確認
 
-`classic-mtoon-export.spec.ts`は、CLI変換と既存Classicへの書き出しで作った実ファイルを描画します。通常のcheckoutでは準備結果がないためSKIPします。Node.js 22.15以上、ロックファイルに沿ったリポジトリ依存、導入済みの公式CLI 0.25.0、Chromiumを用意し、次をリポジトリ直下で実行してください。`--cli`には公式CLIの`dist/index.js`を指定します。`XRIFT_CLASSIC_CLI_ENTRY`環境変数でも指定できます。
+`classic-mtoon-export.spec.ts` は、CLI 変換と既存 Classic プロジェクトへの書き出しで生成したファイルを描画して検証します。通常のチェックアウト直後には事前生成データがないためスキップされます。
+
+実行するには、Node.js 22.15 以上、リポジトリの依存パッケージ、公式 `@xrift/cli` 0.25.0、Chromium を用意し、リポジトリルートで次を実行してください。`--cli` には公式 CLI の `dist/index.js` のパスを指定します（環境変数 `XRIFT_CLASSIC_CLI_ENTRY` でも指定可能）。
 
 ```bash
 node scripts/prepare-classic-mtoon-exports.cjs --cli "/installed/path/@xrift/cli/dist/index.js"
 pnpm e2e:test e2e/classic-mtoon-export.spec.ts --workers=1
 ```
 
-準備にはGitHubの公式テンプレート取得が必要です。既定ではCLI版を0.25.0、world-templateのcommitを`e8b22b78a51cf83748a2019c80e2b639bb137dff`に固定します。更新時は`--cli-version`と`--template-commit`で確認する版と40桁のcommit SHAを明示してください。CLI版・入口のSHA256・テンプレートcommitは完了記録へ残ります。
+準備処理では GitHub から公式テンプレートを取得します。既定では CLI バージョン `0.25.0`、`world-template` のコミット `e8b22b78a51cf83748a2019c80e2b639bb137dff` に固定しています。バージョンを上げるときは `--cli-version` と `--template-commit`（40 桁のコミット SHA）を明示してください。
 
-[準備script](./scripts/prepare-classic-mtoon-exports.cjs)は検証用の合成VRM0/1とPNG10件を使い、`node_modules/.cache/xrift-studio/classic-mtoon-export/`内に別々のClassicプロジェクトを作ります。実際の変換とファイル書き込みを通し、素材12件・生成コード・manifest・provenanceの検査後だけ`completed.json`を作ります。開始時と失敗時には古い完了記録を除き、終了コード1で失敗を知らせます。制作物の依存インストール、ビルド、認証、公開は行いません。準備が強制終了して`prepare.lock`だけ残った場合は、準備プロセスが終了したことを確認してそのファイルだけを除いてください。
+[準備スクリプト](./scripts/prepare-classic-mtoon-exports.cjs) はテスト用の合成 VRM 0/1 と PNG 10 点を使い、`node_modules/.cache/xrift-studio/classic-mtoon-export/` 配下に独立した Classic プロジェクトを作成します。変換・書き出し後に素材 12 点、生成コード、manifest、来歴情報を検証し、すべて通過したときだけ `completed.json` を出力します（依存インストール・ビルド・認証・公開は行いません）。強制終了で `prepare.lock` だけが残った場合は、プロセスが終了していることを確認した上でそのファイルのみ削除してください。
 
 ## 紹介ページのダウンロード導線
 
-GitHub Pagesの紹介ページから、最新リリースのインストーラーを直接ダウンロードできます。ページにはビルド時に取得したリリースを表示し、表示後に公開APIの応答で更新します。
+GitHub Pages の紹介ページでは、最新リリースのインストーラーを直接ダウンロードできます。ビルド時に取得したスナップショットを初期表示し、読み込み後に GitHub API の応答で最新情報へ差し替えます。
 
-- ビルド時: `pnpm release:snapshot`が公開済みの最新リリースを読み、`src/preview/generated/release-snapshot.ts`を書き換えます。生成物はコミットします。取得に失敗した場合は既存のスナップショットを保ったまま終了し、ビルドを止めません。
-- 表示後: ページがGitHubの公開APIへ問い合わせ、返ってきたリリースでスナップショットを置き換えます。1ページの読み込みにつき1回だけ問い合わせます。
+- **ビルド時**: `pnpm release:snapshot` が公開済みの最新リリースを取得し、`src/preview/generated/release-snapshot.ts` を更新します（生成物はコミット対象）。取得に失敗した場合は既存のスナップショットを維持し、ビルド自体は止めません。
+- **ページ表示後**: 1 回のページ読み込みにつき 1 度だけ GitHub の公開 API へ問い合わせ、最新のリリース情報へ更新します。
 
-`.github/workflows/pages.yml`はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts`とパッケージ定義の生成処理も合わせて更新してください。状態設計は [マイクロインタラクションWiki](./docs/UX_INTERACTIONS.md) のF-41にあります。
+`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、新しいリリース公開時にも自動で再デプロイします。インストーラーのファイル名規則（`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`）を変更する場合は、`src/preview/lib/release-download.ts` とパッケージ定義の生成処理も一緒に更新してください。状態遷移の設計は [マイクロインタラクション一覧](./docs/UX_INTERACTIONS.md) の F-41 にあります。
 
 ## 配布ビルド
 
@@ -102,27 +107,27 @@ GitHub Pagesの紹介ページから、最新リリースのインストーラ�
 pnpm tauri:build
 ```
 
-成果物は`src-tauri/target/release/bundle/`にOS別で出力されます。
+OS ごとのインストーラーは `src-tauri/target/release/bundle/` に出力されます。
 
 ## リポジトリ構成
 
-```
-src/                       フロントエンド (React + TypeScript)
-  App.tsx                  メインレイアウト / ルーティング
+```text
+src/                       フロントエンド（React + TypeScript）
+  App.tsx                  メインレイアウト・ルーティング
   components/              UI コンポーネント
     SetupView.tsx          初回セットアップ画面
     ProjectLibrary.tsx     プロジェクト一覧
-    EditorView.tsx         エディタ画面
+    EditorView.tsx         エディター画面
     UpdateDialog.tsx       @xrift/cli アップデート通知
-    AboutModal.tsx         バージョン情報 / リセット
+    AboutModal.tsx         バージョン情報・リセット
     ...
   lib/
     tauri.ts               Rust コマンドの型付きラッパー
     xrift-cli.ts           tauri-plugin-shell 経由で xrift CLI を呼び出す
     semver.ts              バージョン比較ユーティリティ
 
-src-tauri/                 Rust バックエンド (Tauri v2)
-  src/lib.rs               コマンド実装（ランタイム管理 / ファイル操作 / リセット）
+src-tauri/                 Rust バックエンド（Tauri v2）
+  src/lib.rs               コマンド実装（ランタイム管理・ファイル操作・リセット）
   capabilities/            shell 実行の許可リスト
   tauri.conf.json          Tauri 設定
   Cargo.toml
@@ -131,74 +136,73 @@ src-tauri/                 Rust バックエンド (Tauri v2)
   release.yml              Windows / macOS / Linux の自動リリースワークフロー
 ```
 
-## 主要な Tauri コマンド
+## 主な Tauri コマンド
 
 | コマンド | 役割 |
-|---|---|
-| `runtime_status` | Node.js / npm、CLIの実ファイルとバージョンを確認。推奨版未満ならセットアップへ案内 |
-| `setup_runtime` | Node.jsダウンロード → 展開 → 推奨CLIのインストール → 実行確認 |
-| `check_xrift_latest` | npm registryから @xrift/cliの最新版を取得 |
-| `update_xrift` | 最新の安定版を取得し、版を指定してインストール。実行とバージョンを確認 |
-| `reset_app_data` | scopeに応じてアプリデータを削除（runtime / projects / all） |
-| `list_projects` | `projects/`配下のプロジェクトを列挙 |
-| `read_text_file` / `write_text_file` | 任意のファイルを読み書き |
+| --- | --- |
+| `runtime_status` | Node.js / npm と CLI の実体・バージョンを確認。推奨バージョン未満ならセットアップへ案内 |
+| `setup_runtime` | Node.js のダウンロード・展開、推奨 CLI のインストール、実行確認を一括実行 |
+| `check_xrift_latest` | npm レジストリから `@xrift/cli` の最新版を確認 |
+| `update_xrift` | 最新の安定版を取得してバージョン指定でインストールし、実行確認まで実施 |
+| `reset_app_data` | 指定した範囲（`runtime` / `projects` / `all`）のアプリデータを削除 |
+| `list_projects` | `projects/` 配下のプロジェクト一覧を取得 |
+| `read_text_file` / `write_text_file` | テキストファイルの読み書き |
 
-### 制作ツールのバージョン
+### 同梱する制作ツールのバージョン
 
-初回セットアップの基準は`src-tauri/src/runtime_installation.rs`にまとめています。現在はNode.js **24.21.0** と`@xrift/cli` **0.26.0** です。CLIは初回導入時にこの版を指定し、既存の古い版もセットアップ画面から更新します。推奨版以上の安定版は保持します。Node.jsの保存先は版ごとに分かれますが、CLIの保存先、ログイン情報、作品フォルダーは引き継ぎます。
+初回セットアップで導入するバージョンは `src-tauri/src/runtime_installation.rs` で管理しています。現在の基準は Node.js **24.21.0** と `@xrift/cli` **0.26.0** です。初回導入時にこれらをインストールし、古いバージョンが入っている場合はセットアップ画面から更新します（推奨版以上の安定版が入っている場合はそのまま維持します）。Node.js の保存先はバージョンごとに分かれますが、CLI・ログイン情報・作品フォルダーはそのまま引き継がれます。
 
-CLIはアプリ専用Node.jsから公式の`dist/index.js`を直接実行します。`sh -c`を使い、ログインシェルによる`PATH`やアプリ専用ホームの書き換えを避けます。セットアップ・更新は同時に実行できず、完了表示の前に`--version`の実行を確認します。
+CLI はアプリ専用の Node.js から公式の `dist/index.js` を直接呼び出します。ログインシェルによる `PATH` やホームディレクトリの書き換えを避けるため `sh -c` を経由します。セットアップと更新は同時実行できないよう排他制御し、完了表示の前に `--version` で起動できることを確認しています。
 
-CLI 0.26.0に対応し、StudioのSDKは **0.2.0** を維持します。ワールドの公開では、ビルド成果物の`<Item itemId>`と`xrift.json`の`world.items`をCLIが照合します。SDK経由の公開でも、設定にあるItem IDを公開オプションへ引き継ぎます。`xrift.json`のあるプロジェクトルートで実行し、タイトルと既存の除外設定を引き続き渡します。`check world --build` / `check item --build`ではビルドが実行されないため、種類を自動判定する **`check --build`** を維持します。コンパイラと公開用shellの生成には、想定する構成を持つ公式テンプレートを明示します。
+CLI 0.26.0 に合わせて Studio の SDK は **0.2.0** を維持します。ワールド公開時は、ビルド成果物の `<Item itemId>` と `xrift.json` の `world.items` を CLI が照合します。SDK 経由の公開でも `xrift.json` にある Item ID を公開オプションへ引き継ぎ、プロジェクトルートで実行してタイトルと除外設定を渡します。`check world --build` / `check item --build` ではビルドが走らないため、種類を自動判定する **`check --build`** を使っています。コンパイラや公開用ランタイムシェルの生成では、想定構成に合う公式テンプレートを明示指定します。
 
-Item配置はworld-components **0.64.0** の公式Itemを使います。2026-11-12に[componentsのソース](https://github.com/WebXR-JP/xrift-world-components/tree/bb5bd1c66cb1565bd039c7328d7b8ef3b4cd03c5)を、2026-10-13に[world-templateのソース](https://github.com/WebXR-JP/xrift-world-template/tree/e8b22b78a51cf83748a2019c80e2b639bb137dff)を照合しました。配置ごとの固定`placementId`、`world.items`宣言、`remoteEntry.js`の`./Item`公開、公式の共有依存ラベルを保ちます。生成するVite設定にはSDK 0.2.0の`xriftDev()`を含めます。Studioの編集・Play用ローダーはネイティブで認証情報を付けて配信URLだけを返し、公開物はXRift側のItemLoaderを使います。
+Item 配置には `@xrift/world-components` **0.64.0** の公式 `Item` を使います（2026-11-12 に [components のソース](https://github.com/WebXR-JP/xrift-world-components/tree/bb5bd1c66cb1565bd039c7328d7b8ef3b4cd03c5)、2026-10-13 に [world-template のソース](https://github.com/WebXR-JP/xrift-world-template/tree/e8b22b78a51cf83748a2019c80e2b639bb137dff) を確認済み）。配置ごとの固定 `placementId`、`world.items` 宣言、`remoteEntry.js` の `./Item` 公開、公式の共有依存ラベルを維持し、生成する Vite 設定には SDK 0.2.0 の `xriftDev()` を含めます。Studio の編集・Play 用ローダーはネイティブ側で認証を処理して配信 URL のみを返し、公開先のワールドでは XRift 本体の `ItemLoader` を使います。
 
-公式Componentsの更新では、エディター・Play・コンパイラ・公開用shell・runtime packageの版を揃えます。更新後は`scripts/check-world-components-alignment.mjs`と`pnpm runtime:shell:check`で整合を確認します。
+公式 Components を更新するときは、エディター・Play・コンパイラ・公開用ランタイムシェル・runtime パッケージのバージョンをすべてそろえ、`scripts/check-world-components-alignment.mjs` と `pnpm runtime:shell:check` で整合を確認してください。
 
-Components 0.55.0のMirrorでは`reflectionInterval`に対応し、既定の反射更新を2フレームに1回へ揃えています。毎フレーム更新したい場合は1を指定します。EntryLogBoardの`formatTimestamp`は0.54.0以降、epochミリ秒の数値を受け取ります。自作の表示処理でDateのメソッドを使っている場合は、先に`new Date(timestampMs)`へ変換してください。旧形式の文字列で共有されている入退室履歴は公式側で表示対象外になるため、この依存更新で過去の履歴が復元されることはありません。
+- Components 0.55.0 の `Mirror` は `reflectionInterval` に対応しており、既定では 2 フレームに 1 回反射を更新します（毎フレーム更新したい場合は `1` を指定）。
+- `EntryLogBoard` の `formatTimestamp` は 0.54.0 以降、epoch ミリ秒の数値を受け取ります。自作の表示処理で `Date` のメソッドを使っている場合は、先に `new Date(timestampMs)` へ変換してください。旧形式の文字列で共有されている入退室履歴は公式側で表示対象外となるため、このアップデートで過去履歴が復元されることはありません。
 
-## リリース
+## リリース手順
 
-`.github/workflows/release.yml`でWindows / macOS / Linuxのインストーラを一括ビルドします。
+`.github/workflows/release.yml` で Windows・macOS・Linux 向けのインストーラーを一括ビルドできます。
 
-GitHub ActionsのリポジトリSecretsに次を登録してください。
+あらかじめ GitHub Actions のリポジトリ Secrets に次の 2 つを登録しておいてください（公開鍵は `src-tauri/tauri.conf.json` の updater 設定に含まれています。秘密鍵とパスワードはリポジトリにコミットしないでください）。
 
-- `TAURI_SIGNING_PRIVATE_KEY`: `pnpm tauri signer generate`で生成したupdater秘密鍵の内容
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: 秘密鍵を生成したときのパスワード
+- `TAURI_SIGNING_PRIVATE_KEY`: `pnpm tauri signer generate` で生成した updater 秘密鍵の内容
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: 秘密鍵生成時に設定したパスワード
 
-公開鍵は`src-tauri/tauri.conf.json`のupdater設定に含まれます。秘密鍵ファイルとパスワードはリポジトリへ追加しないでください。
+### 公開の流れ
 
-1. アプリの版番号を揃え、`docs/releases/<version>.md`を作成します。先頭は`# XRift Studio v<version>`とし、前回のリリースから利用者に関わる変更点を箇条書きで記載します。空の更新文やタグとTauri設定の版番号の不一致はリリース前の検証で止まります。
-2. GitHub Actionsタブ → **Release** → **Run workflow**
-3. タグ名（例: `v0.1.0`）を入力して実行
-4. 検査成功後にReleaseの下書きを1つ作り、全OSのインストーラーと署名を並列で添付します。すべて成功すると、最後のjobが必要ファイルと署名を確認し、全OS分の`latest.json`を1回だけ生成・添付してから公開します。更新文はGitHub Releaseと自動更新用の説明に入ります。
+1. `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`（`xrift-studio` エントリーのみ）のバージョン番号をそろえ、`docs/releases/<version>.md` を作成します。見出しは `# XRift Studio v<version>` とし、前回リリースからのユーザー向け変更点を箇条書きで書きます。空のリリースノートやバージョン不一致は事前チェックで停止します。
+2. GitHub の Actions タブから **Release** → **Run workflow** を開きます。
+3. タグ名（例: `v1.0.21`）を入力して実行します。
+4. 事前チェック通過後にドラフトの Release を 1 つ作成し、各 OS のインストーラーと署名を並列で添付します。すべてそろった段階で最終ジョブが全 OS 分の `latest.json` を生成・添付し、公開します。リリースノートの内容は GitHub Release とアプリ内自動更新の両方に使われます。
 
-版番号は`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`の`xrift-studio`エントリーを揃えます。依存パッケージの版番号は変更しません。
+アプリの自動更新（`releases/latest/download/latest.json`）の対象になるのは、公開済みの通常リリースだけです。ドラフトやプレリリースは通常リリースにするまで配信されません。
 
-公開済みの通常リリースだけがアプリの`releases/latest/download/latest.json`から取得されます。ドラフトは公開するまで、プレリリースは通常リリースになるまで自動更新の対象になりません。
-
-| OS | 生成される成果物 |
-|---|---|
-| Windows | `.msi` (Windows Installer) / `.exe` (NSIS) |
-| macOS | `.dmg`（universal — Apple Silicon + Intel） |
+| OS | 生成されるインストーラー |
+| --- | --- |
+| Windows | `.msi`（Windows Installer）/ `.exe`（NSIS） |
+| macOS | `.dmg`（Universal: Apple Silicon + Intel） |
 | Linux | `.deb` / `.rpm` / `.AppImage` |
 
-**プレリリース／下書き** のオプションもあります（workflow実行時のフォーム参照）。`draft`を選んだ場合も全ファイルと更新情報を添付し、公開せずに下書きに残します。OS別ビルド、添付、更新情報の生成のどこかで失敗した場合も下書きのまま停止します。
+フォームのオプションでプレリリースや下書き指定も可能です。`draft` を選んだ場合や、ビルド・添付・`latest.json` 生成のどこかで失敗した場合は、公開せず下書きのまま停止します。
 
-### 添付に失敗した場合
+### 添付が途中で失敗した場合
 
-[GitHubのImmutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)では、公開すると添付ファイルとタグが固定されます。公開前に全ファイルを添付する必要があり、公開済みReleaseへの追加や差し替えはできません。ワークフローはビルド前に既存Releaseの状態を確認し、公開済みなら新しい版番号とタグを使うよう案内して停止します。
+[GitHub の Immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) では、一度公開したリリースはタグと添付ファイルが固定され、あとからファイルを追加・差し替えできません。ワークフロー側でも既存リリースが公開済みなら新しいバージョンを使うよう案内して停止します。
 
-- **下書きのまま失敗した場合**: 同じcommit・同じタグの実行を再実行できます。添付済みファイルを再利用・更新し、最後に全ファイルから`latest.json`を作り直します。別commitを同じ下書きへ混ぜる操作は停止します。
-- **公開済みの版にファイルが不足する場合**: 新しい版番号とタグで配布し直します。Immutable releaseを削除しても、同じタグ名は再利用できません。
+- **下書きのまま失敗した場合**: 同じコミット・同じタグでワークフローを再実行できます。添付済みファイルを再利用しつつ不足分を補い、最後に `latest.json` を作り直します（別コミットを同じ下書きに混ぜる実行は停止します）。
+- **公開済みリリースにファイルが足りない場合**: 新しいバージョン番号とタグでリリースし直してください。Immutable release を削除しても同じタグ名は再利用できません。
 
-2026年9月22日の`v0.10.2`は、`releaseDraft: false`の設定により添付前に公開されました。全OSのファイルが未添付のままReleaseが固定されたため、修正を含むブランチのマージ後にRelease → Run workflow → `v0.10.3`で配布し直します。通常公開では`draft`と`prerelease`を選びません。`v0.10.2`の失敗した実行を再実行しても、固定済みReleaseは修復できません。[対象の実行](https://github.com/WebXR-JP/xrift-studio/actions/runs/35712907566)
+> 参考: 2026 年 9 月 22 日の `v0.10.2` は `releaseDraft: false` だったため添付完了前に公開されてしまい、ファイル不足のまま固定されました（[該当ワークフロー](https://github.com/WebXR-JP/xrift-studio/actions/runs/35712907566)）。この対策として通常リリースでは下書き作成後に全ファイル添付・公開の順で処理しています。
 
-公開処理の回帰確認は`node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs`で実行します。実際のReleaseを作らず、公開済みタグの拒否、下書きからの再実行、全OSの更新情報、添付失敗時に公開しないことを確認します。
+リリース処理の回帰テストは `node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs` で実行できます（実際の Release は作成しません）。
 
-### Homebrewの更新
+### Homebrew 配布定義の更新
 
-通常リリースの公開後、**Update Homebrew** が配布ファイルのURLとSHA-256から定義を更新し、このリポジトリに更新PRを作ります。HomebrewはPRのマージ後に配布版が切り替わります。
+通常リリースの公開後、**Update Homebrew** ワークフローがインストーラーの URL と SHA-256 をもとに定義を更新し、PR を作成します。その PR をマージすると Homebrew 側の配布版が切り替わります。
 
 ```bash
 node scripts/update-package-managers.mjs
@@ -206,28 +210,26 @@ node scripts/update-package-managers.mjs --check
 node --test scripts/update-package-managers.test.mjs
 ```
 
-最初のコマンドは公開済みの最新リリースを取得し、`--check`は保存済みの情報と生成物の整合をネット接続なしで確認します。初回のActions設定、生成物の回収、macOSでの動作確認は[Homebrewでの配布](./docs/PACKAGE_MANAGERS.md#配布定義を更新する)を参照してください。
+1 つ目は最新の公開リリースを取得して定義を更新、2 つ目の `--check` はローカルの定義と生成物の整合をオフラインで検証します。詳しい運用手順は [Homebrew での配布](./docs/PACKAGE_MANAGERS.md#配布定義を更新する) を参照してください。
 
 <a id="所要時間の作り"></a>
 
-### 所要時間に影響する処理
+### CI ビルドの高速化ポイント
 
-OS別ビルド前の検査は、`verify`と`Release smoke E2E`の2つのjobで並列に実行します。E2Eでは`pnpm e2e:smoke`で主要導線9件を1台・1 workerで確認します。型検査、コンパイラfixture、公開ステージング検査は`verify`で行います。
-
-Rustの成果物は`src-tauri/target`と`src-tauri/target-mcp-sidecar`の両方をキャッシュします。MCP sidecarは`--target-dir`で別のディレクトリへ出力されます。`target`だけをキャッシュしていた頃は、sidecarの依存を毎回すべてビルドし直していました。`Swatinem/rust-cache`の`workspaces`からどちらかを除外すると、そのディレクトリの再ビルドが必要になります。
-
-macOSのuniversal版では、aarch64とx86_64のsidecarを作ります。`beforeBuildCommand`でhost向けの3つ目をビルドしないよう、build jobにだけ`XRIFT_MCP_SIDECAR_REUSE_PREBUILT`を設定します。設定時は`scripts/prepare-mcp-sidecar.mjs`が目的の実行ファイルを確認し、すでにある場合だけcargoを省略します。なければ通常どおりビルドします。debugとreleaseは同じファイル名で出力するため、日常の開発ではこの変数を設定しません。
+- OS ごとのビルド前に走る検査は、`verify`（型チェック・コンパイラ fixture・公開ステージング検証）と `Release smoke E2E`（`pnpm e2e:smoke` による主要 9 件の確認）の 2 ジョブで並列実行します。
+- Rust のビルドキャッシュには `src-tauri/target` と `src-tauri/target-mcp-sidecar` の両方を含めています。MCP sidecar は `--target-dir` で別ディレクトリへ出力しているため、どちらか片方が漏れると毎回フルビルドになります。
+- macOS Universal 版では aarch64 と x86_64 の sidecar を事前ビルドし、ビルドジョブにだけ `XRIFT_MCP_SIDECAR_REUSE_PREBUILT` を設定して `beforeBuildCommand` での重複ビルドを防いでいます（debug と release でファイル名が同じため、ローカル開発では設定しないでください）。
 
 ## 対応状況
 
-[対応範囲](./docs/VISUAL_EDITOR_ROADMAP.md)を参照してください。過去の予定バージョンを現行の実装状況として扱わず、変更対象のソースと照合します。
+現在の対応範囲は [対応状況](./docs/VISUAL_EDITOR_ROADMAP.md) を参照してください。ドキュメント上の旧予定バージョンをそのまま現行仕様とみなさず、変更時は必ず最新のソースコードと照合してください。
 
 ## コントリビュート
 
-IssueやPull Requestを受け付けています。大きな変更は、実装前にIssueで相談してください。
+Issue や Pull Request を歓迎します。大きな機能追加や仕様変更は、実装前に Issue で方針を相談していただけるとスムーズです。
 
-## 大規模Sceneの開発時計測
+## 大規模 Scene での開発時パフォーマンス計測について
 
-React 19.2とReact Three Fiber内蔵のreconcilerは、開発用Performance Tracksへpropsを書き出す際に巨大なTypedArrayなどを列挙・複製します。大規模モデルでは描画前にメモリ不足になるため、開発版の起動時に`console.timeStamp`を無効にして計測を止めています。
+React 19.2 と React Three Fiber 内蔵の reconciler は、開発用の Performance Tracks へ props を記録する際に巨大な TypedArray などを列挙・複製します。大規模な 3D モデルでは描画前にメモリ不足でクラッシュするため、開発ビルド起動時に `console.timeStamp` を無効化してこの計測を止めています。
 
-この設定中はChrome DevToolsのReactタイムライントラックを使えません。Reactの警告・Profiler、Studioの診断、通常の`performance.mark/measure`は利用できます。本番版には適用しません。React DOMとR3F内蔵reconcilerの両方で列挙量が制限されたら、この回避策を外してください。
+この回避策により Chrome DevTools の React タイムライントラックは使えませんが、React の警告・Profiler、Studio の診断、通常の `performance.mark` / `measure` は問題なく利用できます。本番ビルドには影響しません。React DOM と R3F の双方で列挙量の上限が導入されたら、この回避策を削除してください。

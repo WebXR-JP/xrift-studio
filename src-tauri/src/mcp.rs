@@ -4910,12 +4910,12 @@ mod tests {
     #[test]
     fn world_creation_policy_replaces_scaffolding_without_discarding_authored_work() {
         let instructions = mcp_authoring_instructions();
-        for expected in ["ワールド全体", "初期形状を残すためだけに新しい機能を作らない", "Never infer disposable content by a name or ID alone",
-            "starterEntityIds", "依頼の範囲外の制作物と作者の手動編集は保つ", "最初の保存時点", "完成条件を満たしたら作業を終える", "existing run budget unchanged"] {
+        for expected in ["ワールド全体", "初期形状を残すためだけに不要な要素を足さない", "Never infer disposable content by a name or ID alone",
+            "starterEntityIds", "依頼範囲外の制作物や作者の手動編集は壊さず残す", "最初の保存時点", "完成条件を満たしたら終了し", "existing run budget unchanged"] {
             assert!(instructions.contains(expected), "missing creation policy: {expected}");
         }
         assert!(instructions.contains("target=current selects the project to work in"));
-        assert!(instructions.contains("床や小物1点だけでは、場所全体を作り終えたことにはならない"));
+        assert!(instructions.contains("床や小物1点だけではワールド完成とは言えない"));
         assert!(instructions.contains("get_world_authoring_guide(topic:r3f)"));
         assert!(!instructions.contains("UTF-8で48,000バイト"), "route details load only when selected");
         let characters = instructions.chars().count();

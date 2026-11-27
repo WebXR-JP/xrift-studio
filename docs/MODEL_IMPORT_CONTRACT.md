@@ -4,121 +4,128 @@
 
 ## 目的
 
-GLB / glTFを素材Manifestへ取り込み、シーン、設定、Collider、Compilerから同じ派生情報を参照できるようにする。元ファイルの読み込みやサムネイル生成に失敗した場合も、最後に保存できたManifestを保持する。
+GLB / glTF ファイルを素材マニフェストへ取り込み、シーン・設定・Collider・コンパイラーのすべてから同じ派生情報を参照できるようにする。元ファイルの読み込みやサムネイル生成に失敗した場合でも、最後に正常保存できたマニフェストをそのまま残す。
 
 ## 永続化する情報
 
-`ModelAsset`は次の情報を保持する。
+`ModelAsset` は次の情報を保持する。
 
-- `id`: シーンとプレハブが参照する安定した素材ID
-- `source` / `sourceHash`: project-relative元データとSHA-256
-- `importSettings`: scale、Collider生成と、将来のprocessor用に保持するメッシュ最適化・Animation取り込み設定
-- `materialSlots`: 安定した`slot`、表示名、元データマテリアルindex、任意の既定マテリアルbinding
-- `importMetadata`: 元データformat、byte length、ノード / メッシュ / primitive count、モデルローカルbounds、Animation名・長さ・track数・元データindex、glTF extensions
-- `thumbnail`: 元データhashとrenderer versionを持つ派生画像。再取り込み後に生成できなければ旧画像を`stale`として明示する
+- `id`: シーンやプレハブから参照する安定した素材 ID
+- `source` / `sourceHash`: プロジェクト相対パスで表した元データと SHA-256 ハッシュ
+- `importSettings`: スケール、Collider 生成の設定、および将来の処理向けに保持するメッシュ最適化・アニメーション取り込み設定
+- `materialSlots`: 安定したスロット ID（`slot`）、表示名、元データのマテリアル番号、任意の既定マテリアル割り当て
+- `importMetadata`: 元データの形式、バイト長、ノード数・メッシュ数・プリミティブ数、モデルローカル座標のバウンディングボックス（`bounds`）、アニメーションの名前・長さ・トラック数・元データの番号、glTF 拡張機能
+- `thumbnail`: 元データのハッシュとレンダラーのバージョンを持つ派生画像。再取り込み後に生成できなかった場合は、旧画像を `stale` として明示する
 
-`bounds`は素材import scaleとオブジェクト位置・回転・大きさを適用する前のモデルローカル座標である。Colliderの自動fitはこの値へimport scaleだけを適用する。
+`bounds` は、素材の取り込みスケールやオブジェクトの位置・回転・大きさを適用する前のモデルローカル座標である。Collider の自動フィットでは、この値に対して取り込みスケールだけを適用する。
 
 ## 新規取り込み
 
-1. 拡張子、MIME、ファイルサイズ、SHA-256を確認する。
-2. glTF 2.0 JSON構造と外部URI依存を確認する。
-3. loaderでシーン、Animation、boundsを検査する。
-4. 元データJSONからノード / メッシュ / primitive数とマテリアルindexを取得する。
-5. `validateModelAssetContract`で非有限値、壊れたbounds、重複slot、参照切れを検査する。
-6. 元データとthumbnailを一つのatomic import transactionで公開する。
-7. transaction成功後だけManifestへ素材を追加する。
+1. 拡張子、MIME タイプ、ファイルサイズ、SHA-256 ハッシュを確認する。
+2. glTF 2.0 の JSON 構造と外部 URI への依存を確認する。
+3. ローダーでシーン、アニメーション、`bounds` を検査する。
+4. 元データの JSON からノード数・メッシュ数・プリミティブ数とマテリアル番号を取得する。
+5. `validateModelAssetContract` で非有限値、壊れた `bounds`、重複するスロット、参照切れを検査する。
+6. 元データとサムネイルを 1 つのアトミックな取り込みトランザクションで反映する。
+7. トランザクションが成功した場合に限り、素材マニフェストへ素材を追加する。
 
-Blocking diagnosticが一つでもあれば、ファイルcommitとManifest更新は行わない。
+ブロッキングエラーが 1 件でもあれば、ファイルの確定とマニフェストの更新は行わない。
 
 ## 再取り込み
 
-`createModelReimportPlan(existingAsset, input)`は既存素材を置換する計画を作る。`AssetImportPlan.replacesAssetId`が置換対象を明示する。`commitAssetImportPlan`は次を保証する。
+`createModelReimportPlan(existingAsset, input)` は、既存素材を置き換えるための計画を作成する。置換対象は `AssetImportPlan.replacesAssetId` で明示し、`commitAssetImportPlan` は次を保証する。
 
-- 素材ID、名前、folder、order、import settingsを維持する
-- 元データhashが同一ならファイルを書き直さない。検査済みmetadataだけを更新できる
-- 元データが変化した場合はcontent-addressedな新しい元データ / thumbnail pathへatomic commitする
-- commit失敗時は入力Manifestを返さない。呼び出し側が保持する最後のManifestは変更しない
+- 素材 ID、名前、フォルダー、並び順、取り込み設定を維持する
+- 元データのハッシュが同じであればファイルを書き直さず、検査済みのメタデータだけを更新できる
+- 元データが変化した場合は、内容ハッシュに基づく新しい元データパスとサムネイルパスへアトミックに書き込む
+- 書き込みに失敗した場合は入力マニフェストを返さず、呼び出し側が保持している最後のマニフェストも変更しない
 
-マテリアル枠は次の順で既存slotと照合する。
+マテリアル枠は、次の優先順で既存のスロットと照合する。
 
-1. 元データマテリアルindexと正規化名が一致
-2. 正規化名が一意に一致
-3. 元データマテリアルindexが一致
-4. 一致しなければ`material-{sourceMaterialIndex}`を基準に決定的な新規slot IDを作る
+1. 元データのマテリアル番号と正規化した名前が一致する
+2. 正規化した名前が一意に一致する
+3. 元データのマテリアル番号が一致する
+4. いずれにも一致しない場合は、`material-{sourceMaterialIndex}` を基準に決定的な新しいスロット ID を作る
 
-一致したslotは既存の`slot`と`defaultMaterialAssetId`を維持する。元データから消えたslotは削除する。追加slotは元データindex順に追加する。この手順により、マテリアル順の変更と名前変更の双方で、可能な限りシーン側のbindingを維持する。
+一致したスロットは既存の `slot` と `defaultMaterialAssetId` を引き継ぐ。元データから消えたスロットは削除し、追加されたスロットは元データの番号順に追加する。この手順により、マテリアルの並び順や名前が変わった場合でも、シーン側のマテリアル割り当てを可能な限り維持できる。
 
-`analyzeModelReimportImpact`は確定前または確定後に、旧3Dモデルと新3Dモデルのstable slot IDを比較する。消失slotに対する明示的なマテリアルbindingを、現在のシーンと全プレハブからオブジェクト / コンポーネント単位で収集する。この解析は入力documentを変更しない。無効なオブジェクトやコンポーネントの参照も将来再有効化される可能性があるため、省略しない。canonicalなbuiltin primitive参照があるメッシュでは、互換用の`geometryAssetId`を3Dモデル参照として扱わない。
+`analyzeModelReimportImpact` は、確定前または確定後に旧モデルと新モデルの安定したスロット ID を比較し、消失するスロットに明示的に割り当てられているマテリアル参照を、現在のシーンと全プレハブからオブジェクト／コンポーネント単位で収集する。
+
+- この解析は入力ドキュメントを変更しない。
+- 無効化されているオブジェクトやコンポーネントの参照も、将来再び有効化される可能性があるため省略しない。
+- 組み込みプリミティブの正規参照を持つメッシュでは、互換用の `geometryAssetId` を 3D モデル参照として扱わない。
 
 ## Desktop境界
 
-UIはTauri commandを直接呼ばない。`reimportModelAssetFromDisk`が次をまとめて行う。
+UI は Tauri コマンドを直接呼び出さない。代わりに `reimportModelAssetFromDisk` が次の処理を一括して担う。
 
-1. project-relative元データをdata URLとして読む
-2. bytesへ変換して再取り込み計画を作る
-3. blocking diagnosticを確認する
-4. atomic素材commitを実行する
-5. 成功Manifestまたは変更前Manifestとsanitized messageを返す
+1. プロジェクト相対パスの元データを Data URL として読み込む
+2. バイト列へ変換して再取り込み計画を作成する
+3. ブロッキングエラーがないか確認する
+4. 素材のアトミックな書き込みを実行する
+5. 成功後のマニフェスト（または変更前のマニフェスト）とサニタイズ済みのメッセージを返す
 
-進行状態は`reading-source`、`inspecting-source`、`committing-assets`、`complete`、`failed`のいずれかで通知する。
+進行状態は `reading-source`、`inspecting-source`、`committing-assets`、`complete`、`failed` のいずれかで通知する。
 
 ## 検証境界
 
-- 素材Manifest parseは3Dモデルcontract違反を拒否する。
-- Compilerは素材Manifest codecを通す。このため、同じ違反をblocking diagnosticにする。
-- `model-import-contract.fixture.ts`はslot照合、binding維持、設定更新、metadata round-trip、非有限値拒否、atomic replacementをファイルシステムなしで検証する。
+- 素材マニフェストの解析処理は、3D モデル契約に違反するデータを拒否する。
+- コンパイラーも素材マニフェストのコーデックを通すため、同じ違反をブロッキングエラーとして扱う。
+- `model-import-contract.fixture.ts` は、スロット照合、割り当て維持、設定更新、メタデータの往復変換、非有限値の拒否、アトミックな置換をファイルシステムなしで検証する。
 
 ## Sidecarを参照する3Dモデル
 
-`.gltf`と`.obj`は、依存ファイルと一緒に取り込める。`planModelCompanionBatch`はmodel元データのURIを読む。glTFでは`buffers[].uri`と`images[].uri`、OBJでは`mtllib`とMTLの`map_*`を参照する。同時に取り込むファイルのうち、実際に参照されているものだけをcompanionとして確定する。
+`.gltf` と `.obj` は、依存ファイルと一緒に取り込める。`planModelCompanionBatch` がモデル元データの URI（glTF では `buffers[].uri` と `images[].uri`、OBJ では `mtllib` と MTL の `map_*`）を読み取り、同時に取り込むファイルのうち実際に参照されているものだけを付随ファイル（companion）として確定する。
 
-companionは`createAssetImportPlan`の`companionFiles`へ渡す。`three-model-converter`が自己完結GLBへ正規化する。マテリアル / テクスチャは生成したGLBから展開する。このため、companionを単独素材として重複importしない。参照されていないファイルは従来どおり単独素材として扱う。
+確定した付随ファイルは `createAssetImportPlan` の `companionFiles` へ渡し、`three-model-converter` で自己完結した GLB へ正規化する。マテリアルとテクスチャは生成した GLB から展開するため、付随ファイルを単独素材として重複取り込みすることはない。参照されていないファイルは、従来どおり単独素材として扱う。
 
-`model-companion-batch.fixture.ts`はglTF付属ファイルのグループ化、未参照ファイルの単独維持、MTL経由のtexture解決、単一ファイルbatchの非変更、MTL option flagの除去をファイルシステムなしで検証する。
+`model-companion-batch.fixture.ts` は、glTF 付属ファイルのグループ化、未参照ファイルの単独扱い、MTL 経由のテクスチャ解決、単一ファイルバッチを変更しないこと、MTL オプションフラグの除去をファイルシステムなしで検証する。
 
 ## インスタンスごとの属性
 
-`EXT_mesh_gpu_instancing`を使うノードは、three.jsのGLTFLoaderが`InstancedMesh`として読み込む。位置・回転・大きさはインスタンスの行列になり、`_COLOR_0`は`instanceColor`になる。それ以外の独自属性（`_AOFFSET`のように`_`で始まるもの）は、GLTFLoaderが頂点ごとの属性としてgeometryへ置くため、シェーダーには先頭の数インスタンス分の値が頂点の値として届く。
+`EXT_mesh_gpu_instancing` を使うノードは、three.js の `GLTFLoader` によって `InstancedMesh` として読み込まれる。位置・回転・大きさはインスタンス行列になり、`_COLOR_0` は `instanceColor` になる。一方、それ以外の独自属性（`_AOFFSET` のように `_` で始まるもの）は `GLTFLoader` が頂点属性としてジオメトリに配置するため、そのままではシェーダーに先頭の数インスタンス分の値しか頂点値として届かない。
 
-`packages/xrift-studio-runtime/src/gltf-instance-attributes.ts`は、この独自属性を`InstancedBufferAttribute`として渡す。シェーダーはインスタンスごとに1つの値を読める。
+`packages/xrift-studio-runtime/src/gltf-instance-attributes.ts` は、この独自属性を `InstancedBufferAttribute` に変換して渡すことで、シェーダーからインスタンスごとに 1 つの値を読めるようにする。
 
-- 元データのGLBは書き換えない。読み込むたびに、メモリー上のgeometryだけを作る。
-- 対象は、glTFのJSONでノードが宣言した属性だけである。インスタンス数と頂点数の比較では判定しない。両方の数が同じモデルでも正しく扱い、拡張を使わないモデルには何もしない。
-- 属性はglTFの名前（`_AOFFSET`）と小文字の名前（`_aoffset`）の両方で読める。three.jsは頂点ごとの独自属性を小文字にするので、どちらの属性も同じ規則でシェーダーから読める。小文字の名前を頂点属性が使っている場合は、頂点属性を残す。
-- 複数のノードが同じメッシュを使う場合は、インスタンスのMeshごとにgeometryを分け、各ノードの値を持たせる。頂点とインデックスのバッファーは共有する。インスタンスでないMeshのgeometryは変更しない。
+- 元データの GLB は書き換えず、読み込みのたびにメモリ上のジオメトリだけを作成する。
+- 変換対象は glTF の JSON でノードが宣言した属性だけとする。インスタンス数と頂点数の比較では判定しないため、両方の数が一致するモデルでも正しく扱い、拡張を使わないモデルには何もしない。
+- 属性は glTF での名前（`_AOFFSET`）と小文字の名前（`_aoffset`）の両方で参照できる。three.js が頂点ごとの独自属性を小文字にする挙動に合わせ、どちらの属性も同じ規則でシェーダーから読めるようにしている。ただし、小文字の名前がすでに頂点属性として使われている場合は頂点属性を残す。
+- 複数のノードが同じメッシュを共有する場合は、インスタンスの Mesh ごとにジオメトリを分けて各ノードの値を持たせる。頂点バッファーとインデックスバッファーは共有し、インスタンスではない Mesh のジオメトリは変更しない。
 - インスタンス数より短いアクセサーは変換せず、コンソールへ警告を出す。
 
-Scene View、Play、Assetのプレビューとサムネイル、Runtimeのローダー、公開用に生成したワールドは、同じ処理をGLTFLoaderへ登録する。生成したワールドは`StableModelClone`でモデルを複製する。`StableModelClone`は`InstancedMesh`の個数、行列、`instanceColor`を保つ。
+Scene View、Play、Asset のプレビューとサムネイル、ランタイムのローダー、公開用に生成したワールドは、すべて同じ処理を `GLTFLoader` へ登録する。生成したワールドは `StableModelClone` でモデルを複製し、`InstancedMesh` の個数・行列・`instanceColor` をそのまま引き継ぐ。
 
-`gltf-instance-attributes.fixture.ts`は、属性の型・個数・値、メッシュを共有するノード、通常のモデルを変更しないことを検証する。`e2e/instance-attributes.spec.ts`は、編集、Play、生成したワールド、Runtimeのローダーの描画結果が一致することを確認する。
+`gltf-instance-attributes.fixture.ts` は属性の型・個数・値、メッシュを共有するノードの扱い、通常モデルを変更しないことを検証する。`e2e/instance-attributes.spec.ts` は、編集・Play・生成ワールド・ランタイムローダーの描画結果が一致することを確認する。
 
-依存ファイルと一緒に取り込む`.gltf`は、上記のとおりGLBへ変換する。この変換は独自のインスタンス属性を頂点属性として書き出すため、インスタンスごとの値は保持できない。値を保つには、必要なデータを含むGLBを取り込む。
+なお、依存ファイルと一緒に取り込む `.gltf` は前述のとおり GLB へ変換されるが、この変換処理は独自のインスタンス属性を頂点属性として書き出すため、インスタンスごとの値を維持できない。インスタンスごとの値を維持したい場合は、必要なデータを含む GLB を取り込む必要がある。
 
-ブラウザ版の公開に使うビルド済みシェル（`public/xrift-runtime-shell/`）は、`node scripts/build-world-runtime-shell.mjs`で再生成した時点のRuntimeで動く。Runtimeのローダーを変更したら、シェルを再生成するまで公開先には反映されない。
+ブラウザ版の公開に使うビルド済みシェル（`public/xrift-runtime-shell/`）は、`node scripts/build-world-runtime-shell.mjs` を実行した時点のランタイムで動作する。ランタイムのローダーを変更した場合は、シェルを再生成するまで公開先には反映されない。
 
 ## UI境界
 
-モデルの設定では、最後に正常に読み込めた構造情報、現在のimport recipe、既定マテリアル枠のbindingを分けて表示する。現在のproject-relative元データは同じ素材IDのまま再取り込みできる。進捗と成功・失敗の結果は同じ設定パネルに表示する。処理中に対象素材が編集された場合は、結果を自動適用せず直前の素材を保持する。
+モデルの設定パネルでは、最後に正常に読み込めた構造情報、現在の取り込み設定、既定マテリアル枠の割り当てを分けて表示する。現在のプロジェクト相対パスの元データは、同じ素材 ID のまま再取り込みできる。進捗や成功・失敗の結果は同じ設定パネル内に表示し、処理中に対象素材が編集された場合は結果を自動適用せず、直前の素材を残す。
 
-消失するslotがある場合は、適用前の確認画面か適用後の結果に、slot名、stable ID、失われる3Dモデルの既定マテリアル、影響するシーン / プレハブの割当を表示する。`optimizeMeshes`にはメッシュ最適化の選択を保存する。モデルの設定から変更でき、最適化・再読み込み時に適用される。`importAnimations`では、アニメーションのあるモデルの配置時に、再生用ノードグラフを自動で作るかどうかを指定する。
+消失するスロットがある場合は、適用前の確認画面または適用後の結果に、スロット名、安定したスロット ID、失われる既定マテリアル、影響を受けるシーンやプレハブの割り当てを表示する。
+
+- `optimizeMeshes`: メッシュ最適化の選択を保存する。モデルの設定から変更でき、最適化や再読み込み時に適用される。
+- `importAnimations`: アニメーションを含むモデルを配置したとき、再生用ノードグラフを自動生成するかどうかを指定する。
 
 残る作業は次のとおりである。
 
-- 現在元データの再検査とは別に、別元データを選ぶ置換操作を追加する
-- 取り込み前後のノード / メッシュ / Animation / bounds差分を確定前に確認できるようにする
-- 未参照になったcontent-addressed fileの回収を追加する
+- 現在の元データを再検査する操作とは別に、別の元データを選んで置換する操作を追加する
+- 取り込み前後のノード・メッシュ・アニメーション・`bounds` の差分を確定前に確認できるようにする
+- 参照されなくなったハッシュ付きファイルの回収処理を追加する
 
 ## 読み込み設定と圧縮
 
-初回の取り込みでは、取り込みメニューのテクスチャ設定を使います。モデルごとに変える場合は、モデルの読み込み設定で「テクスチャの最大解像度」を選んで再インポートしてください。「読み込み設定に従う」「原寸のまま」、256〜8192pxから選べます。内蔵画像の縦横比と原本を保持し、個別に保護したテクスチャ設定は上書きしません。
+初回の取り込みでは、取り込みメニューのテクスチャ設定を使用する。モデルごとに変更する場合は、モデルの読み込み設定で「テクスチャの最大解像度」を選び、再インポートを実行する。選択肢は「読み込み設定に従う」「原寸のまま」、および 256〜8192px である。内蔵画像の縦横比と原本は維持され、個別に保護したテクスチャ設定は上書きされない。
 
-メッシュ最適化とDraco圧縮の選択は素材に保存され、再インポートにも適用されます。設定パネルでの最適化と公開前のDraco圧縮には、共通の変換処理を使います。公開前にDraco圧縮を選ぶとDracoが有効になり、メッシュ最適化にはモデルに保存した選択が適用されます。
+メッシュ最適化と Draco 圧縮の選択は素材に保存され、再インポート時にも適用される。設定パネルでの最適化と公開前の Draco 圧縮には共通の変換処理を使う。公開前に Draco 圧縮を選んだ場合は Draco が有効になり、メッシュ最適化にはモデルに保存された選択が適用される。
 
-原本は保持されます。圧縮のチェックを外して再インポートすると、原本から読み直せます。原本自体がDraco圧縮済みの場合は、その圧縮が残ります。
+原本は常に残るため、圧縮のチェックを外して再インポートすれば原本から読み直せる。ただし、原本自体が Draco 圧縮済みの場合はその圧縮が残る。
 
-「配置時にMesh Colliderを追加」を外して再インポートすると、そのモデルを参照するシーンとプレハブのMesh Colliderを取り除きます。手動で付けたMesh Colliderも対象です。Box Colliderなど他の形状、他のモデル、編集済みの階層や位置・回転・大きさは保持します。再インポートが失敗した場合は、現在の素材とColliderを保持します。
+「配置時にMesh Colliderを追加」を外して再インポートすると、そのモデルを参照しているシーンとプレハブから Mesh Collider を取り除く（手動で付けた Mesh Collider も対象）。Box Collider など他の形状、他のモデル、編集済みの階層や位置・回転・大きさはそのまま残る。再インポートが失敗した場合は、現在の素材と Collider を変更しない。
 
-MCPでは`update_model_asset`の`patch.importSettings`に`compressWithDraco`と`textureMaxSize`を指定できます。`textureMaxSize`は`"default"`、`"original"`、または256、512、1024、2048、4096、8192です。設定を保存した後、`reimport_model_asset`で適用します。
+MCP では、`update_model_asset` の `patch.importSettings` に `compressWithDraco` と `textureMaxSize` を指定できる。`textureMaxSize` には `"default"`、`"original"`、または 256・512・1024・2048・4096・8192 を渡す。設定を保存したあと、`reimport_model_asset` で適用する。
 
-Dracoはモデルの転送サイズを小さくします。描画時のテクスチャメモリを減らすには、テクスチャの解像度縮小とKTX2圧縮を使います。
+Draco 圧縮はモデルの転送サイズを小さくする仕組みである。描画時のテクスチャメモリを減らすには、テクスチャの解像度縮小と KTX2 圧縮を使う。
