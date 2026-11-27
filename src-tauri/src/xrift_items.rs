@@ -36,8 +36,8 @@ pub async fn resolve_xrift_item(app: AppHandle, item_id: String) -> Result<Strin
         404 => return Err("NOT_FOUND:アイテムが見つかりません".into()),
         _ => {}
     }
-    if !response.status().is_success() { return Err("LOAD_FAILED:アイテムの解決に失敗しました。再試行してください".into()); }
-    let body: Value = response.json().await.map_err(|_| "LOAD_FAILED:アイテムの応答を読み取れません")?;
+    if !response.status().is_success() { return Err("LOAD_FAILED:アイテム情報の取得に失敗しました。再試行してください".into()); }
+    let body: Value = response.json().await.map_err(|_| "LOAD_FAILED:アイテム情報の応答を読み取れません")?;
     let scene_url = body.get("sceneUrl").and_then(Value::as_str)
         .ok_or("NOT_FOUND:このアイテムは審査中、または配信できる版がありません")?;
     let parsed = reqwest::Url::parse(scene_url).map_err(|_| "LOAD_FAILED:配信URLを確認できません")?;

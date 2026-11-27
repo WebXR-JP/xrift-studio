@@ -22,9 +22,9 @@ export function MobileEditorHelp({ onClose }: { onClose: () => void }) {
     onKeyDown={(event) => event.stopPropagation()}
     onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <h2 id="mobile-editor-help-title" className="text-base font-semibold">スマホでの編集操作</h2>
-    <p className="mt-3 text-sm leading-6">シーン内のEntityをタップして選び、Inspectorで位置や色を変更できます。Hierarchy、Assets、Inspectorは画面を切り替えて使ってください。「シーン」で3D表示に戻れます。</p>
-    <p className="mt-2 text-sm leading-6">1本指でドラッグすると視点が回ります。2本指で移動し、ピンチで拡大・縮小できます。</p>
-    <p className="mt-2 text-sm leading-6">編集中のプロジェクトはブラウザに自動保存されます。「ファイル」の「プロジェクトを書き出す」で.xriftstudioファイルを保存し、iPadやパソコンへ移せます。</p>
+    <p className="mt-3 text-sm leading-6">シーン内のEntityをタップして選択し、Inspectorで位置や色などを調整できます。Hierarchy・Assets・Inspectorは画面を切り替えて開き、「シーン」を選ぶと3D表示に戻ります。</p>
+    <p className="mt-2 text-sm leading-6">3D画面では、1本指のドラッグで視点を回転、2本指のドラッグで移動、ピンチ操作で拡大・縮小できます。</p>
+    <p className="mt-2 text-sm leading-6">編集内容はブラウザに自動保存されます。「ファイル」の「プロジェクトを書き出す」から.xriftstudioファイルを保存すれば、iPadやパソコンへ引き継ぐこともできます。</p>
     <button type="button" autoFocus onClick={onClose} className="mt-4 min-h-11 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">編集を始める</button>
   </dialog>;
 }

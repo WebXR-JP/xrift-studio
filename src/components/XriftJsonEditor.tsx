@@ -485,7 +485,7 @@ export function XriftJsonEditor({
           <div className="flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2.5 text-[11px] text-brand-900">
             <Info size={13} className="mt-0.5 shrink-0 text-brand-600" strokeWidth={2} />
             <div>
-              ignoreなどの詳細設定は「JSONで編集」から変更してください。この画面にない設定も保存時に引き継ぎます。
+              ignoreなどの詳細設定は右上の「JSON」から編集してください。このフォームに表示されていない項目も、保存時にそのまま維持されます。
             </div>
           </div>
         </div>

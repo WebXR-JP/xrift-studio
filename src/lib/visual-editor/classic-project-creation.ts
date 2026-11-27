@@ -99,7 +99,7 @@ export async function createVisualProjectFromClassicSource(input: {
   if (applied.entityIds.length === 0) {
     throw new Error(
       applied.diagnostics[0]?.message ??
-        "コードプロジェクトのシーンをVisualへ変換できませんでした。",
+        "コードプロジェクトのシーンをビジュアルプロジェクトへ変換できませんでした。",
     );
   }
   applied = applyClassicProjectVisualImportEnhancements({
@@ -174,7 +174,7 @@ export async function createVisualProjectFromClassicSource(input: {
             ? cleanupError.message
             : String(cleanupError);
         throw new Error(
-          `${importMessage} 作成途中のプロジェクトを回収できませんでした。プロジェクト一覧で「${input.directoryName}」を確認して削除してください: ${cleanupMessage}`,
+          `${importMessage} 作成途中のプロジェクトを削除できませんでした。プロジェクト一覧で「${input.directoryName}」を確認して削除してください: ${cleanupMessage}`,
         );
       }
     }

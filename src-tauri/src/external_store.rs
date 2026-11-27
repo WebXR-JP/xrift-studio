@@ -952,7 +952,7 @@ fn validate_download_redirect(
 ) -> Result<(), String> {
     // previous includes the initial request, as in reqwest's default policy.
     if previous.len() > DOWNLOAD_REDIRECT_LIMIT || previous.contains(next) {
-        return Err("配布元の転送が繰り返されたため、ダウンロードを停止しました".to_string());
+        return Err("リダイレクトが繰り返されたため、ダウンロードを停止しました".to_string());
     }
     validate_download_url(provider_id, next.as_str()).map(|_| ())
 }
@@ -1006,7 +1006,7 @@ async fn download_to(
         let bytes = chunk.map_err(|error| error.to_string())?;
         size = size.saturating_add(bytes.len() as u64);
         if !(spec.role == "model" && spec.extension == "glb") && size > 768 * 1024 * 1024 {
-            return Err("外部アセットが許可サイズを超えています".to_string());
+            return Err("外部アセットのサイズが上限を超えています".to_string());
         }
         let remaining_prefix = 20usize.saturating_sub(prefix.len());
         prefix.extend_from_slice(&bytes[..bytes.len().min(remaining_prefix)]);
@@ -1073,7 +1073,7 @@ fn commit_staged_downloads(
         match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() || !metadata.is_file() {
-                    return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                    return Err("外部アセットの保存先が通常のファイルではありません".to_string());
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
@@ -1175,7 +1175,7 @@ fn extract_ambient_cg_files(
         }
     }
     if matches.is_empty() {
-        return Err("選択した解像度のZIPに対応ファイルがありません".to_string());
+        return Err("選択した解像度のZIPに対応ファイルが含まれていません".to_string());
     }
     let mut extracted = Vec::new();
     for (role, (index, _, extension)) in matches {
@@ -1187,7 +1187,7 @@ fn extract_ambient_cg_files(
         let byte_length =
             std::io::copy(&mut entry, &mut output).map_err(|error| error.to_string())?;
         if byte_length == 0 || byte_length > 768 * 1024 * 1024 {
-            return Err("ambientCGから展開したファイルが許可サイズ外です".to_string());
+            return Err("ambientCGから展開したファイルのサイズが空、または上限を超えています".to_string());
         }
         output.flush().map_err(|error| error.to_string())?;
         let sha256 = file_sha256(&temporary)?;
@@ -1244,7 +1244,7 @@ async fn install_ambient_cg_asset(
     } else {
         ambient_cg_texture_download(&downloads, &resolution)
     }
-    .ok_or_else(|| "選択した解像度のダウンロードがありません".to_string())?;
+    .ok_or_else(|| "選択した解像度のファイルが見つかりません".to_string())?;
     let format = if kind == "hdri" {
         let format = request
             .format
@@ -1394,7 +1394,7 @@ fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> R
                     })
                 })
             }) {
-                return Err("GLBが外部ファイルを参照しています。自己完結したGLBまたはglTF形式を選んでください".to_string());
+                return Err("GLBが外部ファイルを参照しています。外部ファイルを参照しないGLBまたはglTF形式を選んでください".to_string());
             }
         }
         // Preserve all authored binary bytes; no conversion or texture substitution.
@@ -1409,7 +1409,7 @@ fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> R
         &super::retry_transient_io(|| std::fs::read(&main_path))
             .map_err(|error| error.to_string())?,
     )
-    .map_err(|_| "ダウンロードしたglTF JSONが不正です".to_string())?;
+    .map_err(|_| "ダウンロードしたglTFのJSONが不正です".to_string())?;
     let version = document
         .get("asset")
         .and_then(|asset| asset.get("version"))
@@ -1436,7 +1436,7 @@ fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> R
     }
     let bytes = serde_json::to_vec(&document).map_err(|error| error.to_string())?;
     if bytes.len() > 768 * 1024 * 1024 {
-        return Err("自己完結glTFが許可サイズを超えています".to_string());
+        return Err("データを埋め込んだglTFのサイズが上限を超えています".to_string());
     }
     std::fs::write(&main_path, &bytes).map_err(|error| error.to_string())?;
     let main = staged
@@ -1519,7 +1519,7 @@ pub async fn install_external_store_asset(
         || (kind == "texture" && !specs.iter().any(|entry| entry.role == "base-color"))
         || (kind == "model" && !specs.iter().any(|entry| entry.role == "model"))
     {
-        return Err("選択した解像度のファイルがありません".to_string());
+        return Err("選択した解像度のファイルが見つかりません".to_string());
     }
 
     let project_root = super::canonical_project_root(&project_path)?;
@@ -1579,7 +1579,7 @@ pub async fn install_external_store_asset(
             match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
                 Ok(metadata) => {
                     if metadata.file_type().is_symlink() || !metadata.is_file() {
-                        return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                        return Err("外部アセットの保存先が通常のファイルではありません".to_string());
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
@@ -1651,7 +1651,7 @@ async fn install_otogura_asset(
         .map(str::trim)
         .is_some_and(|value| !value.is_empty() && value != "ogg")
     {
-        return Err("音蔵の音源はOGGのみ配布しています".to_string());
+        return Err("音蔵の音源はOGG形式のみ対応しています".to_string());
     }
 
     let catalog = fetch_otogura_json("/assets.json").await?;
@@ -1689,7 +1689,7 @@ async fn install_otogura_asset(
         match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() || !metadata.is_file() {
-                    return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                    return Err("外部アセットの保存先が通常のファイルではありません".to_string());
                 }
                 if file_sha256(&target)? != sha256 {
                     return Err("同じ保存先に異なる内容のファイルがあります".to_string());

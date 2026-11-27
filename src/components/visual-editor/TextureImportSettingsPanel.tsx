@@ -14,7 +14,7 @@ export function TextureImportSettingsPanel({
       <div className="border-b border-slate-100 px-3 py-2.5">
         <h3 className="text-[13px] font-semibold text-slate-800">取り込むテクスチャのサイズと圧縮</h3>
         <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-          初期設定では、元のサイズと画像形式を保ちます。縮小・圧縮は必要なときだけ選んでください。
+          初期設定では、元のサイズと画像形式のまま取り込みます。縮小・圧縮は必要なときだけ選んでください。
         </p>
       </div>
       <div className="space-y-2.5 p-3">

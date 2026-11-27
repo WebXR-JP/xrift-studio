@@ -120,7 +120,7 @@ function mergeEntity(previous: SceneEntity, generated: SceneEntity, current: Sce
     if (old?.type === "mesh" && (!equal(old, actual) || old.materialBindings.some(binding => overriddenMaterials.has(binding.materialAssetId))
       || !equal(previous.components.find(component => component.type === "transform"), current.components.find(component => component.type === "transform"))
       || !equal(previous.children, current.children) || current.components.some(component => !oldById.has(component.id)))) {
-      throw new ChatgptSceneConflictError(`「${current.name}」の形状構成が変わるため、手動編集した形状・Transform・Material・子Entity・Componentを保持して制作を停止しました`);
+      throw new ChatgptSceneConflictError(`「${current.name}」の構造が変わるため、手動で編集した内容を残して制作を停止しました`);
     }
     if (!old || !equal(old, actual)) components.push(structuredClone(actual));
   }
@@ -136,9 +136,9 @@ export async function validateChatgptR3fSource(source: string, projectKind: Prot
   const plan = analyzeComponentCode(source, projectKind);
   const diagnostic = plan.diagnostics.find(item => item.severity !== "info");
   if (diagnostic) throw new ChatgptPlanInputError(`${diagnostic.line ? `${diagnostic.line}行目: ` : ""}${diagnostic.message}`);
-  if (!plan.nodes.length || plan.nodes.length > R3F_SCENE_MAX_NODES) throw new ChatgptPlanInputError(`R3Fは1回で1〜${R3F_SCENE_MAX_NODES}個のEntityになる範囲で制作してください`);
-  if (plan.assetDependencies.length) throw new ChatgptPlanInputError("R3F内から外部ファイルを参照せず、配置済みの素材は通常の素材操作で追加してください");
-  for (const node of plan.nodes) if (node.kind === "primitive" && !node.material) throw new ChatgptPlanInputError(`「${node.name}」の形状に、colorを指定したMaterialを付けてください`);
+  if (!plan.nodes.length || plan.nodes.length > R3F_SCENE_MAX_NODES) throw new ChatgptPlanInputError(`R3Fで一度に制作できるのは1〜${R3F_SCENE_MAX_NODES}個のEntityまでです`);
+  if (plan.assetDependencies.length) throw new ChatgptPlanInputError("R3Fのコードから外部ファイルは参照できません。素材は通常の素材操作で追加してください");
+  for (const node of plan.nodes) if (node.kind === "primitive" && !node.material) throw new ChatgptPlanInputError(`「${node.name}」の形状には、colorを指定したMaterialを設定してください`);
   return plan;
 }
 
@@ -153,7 +153,7 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
   check();
   let working = bundle;
   let root = operation.entityId ? bundle.scene.entities[operation.entityId] : undefined;
-  if (operation.entityId && (!root?.codeAuthoring || !isR3fSceneAuthoring(root.codeAuthoring))) throw new ChatgptPlanInputError("R3Fの制作原本を持つEntityを指定してください");
+  if (operation.entityId && (!root?.codeAuthoring || !isR3fSceneAuthoring(root.codeAuthoring))) throw new ChatgptPlanInputError("R3Fの元データを持つEntityを指定してください");
   const previous = root?.codeAuthoring;
   if (previous && root) {
     const owned = new Set(Object.values(previous.nodes).map(node => node.entityId));
@@ -161,21 +161,21 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
     for (const [key, node] of Object.entries(previous.nodes)) {
       const baseline = JSON.parse(node.baseline) as SceneEntity;
       if (node.entityId !== r3fManagedEntityId(root.id, key) || baseline.parentId !== root.id && !owned.has(baseline.parentId ?? "")
-        || baseline.children.some(id => !owned.has(id))) throw new ChatgptSceneConflictError("R3Fの部品と制作原本の対応が一致しません。現在のSceneを保持して停止しました");
+        || baseline.children.some(id => !owned.has(id))) throw new ChatgptSceneConflictError("R3Fの部品と元データの整合が取れないため、現在のSceneを変更せずに停止しました");
       for (const component of baseline.components) if (component.type === "mesh") for (const binding of component.materialBindings) referencedMaterials.add(binding.materialAssetId);
     }
     for (const [id, json] of Object.entries(previous.materials)) {
       const baseline = JSON.parse(json) as MaterialAsset;
       if (baseline.id !== id || baseline.kind !== "material" || !record(baseline.properties)
         || !referencedMaterials.has(id) && id !== `asset-r3f-${sha256Utf8(`${root.id}:${JSON.stringify(stable(baseline.properties))}`).slice(0, 28)}`) {
-        throw new ChatgptSceneConflictError("R3FのMaterialと制作原本の対応が一致しません。現在の素材を保持して停止しました");
+        throw new ChatgptSceneConflictError("R3FのMaterialと元データの整合が取れないため、現在の素材を変更せずに停止しました");
       }
     }
   }
   if (previous?.source === operation.source) return { bundle, entityId: root!.id };
   const anchors = previousIdentityKeys(previous, bundle.project.projectKind);
   const keyCounts = explicitKeyCounts(plan.nodes);
-  for (const key of anchors.keys()) if ((keyCounts.get(key) ?? 0) > 1) throw new ChatgptPlanInputError(`R3Fのkey「${key}」が複数の部品に使われています。既存の部品を維持できるよう、一意なkeyにしてください`);
+  for (const key of anchors.keys()) if ((keyCounts.get(key) ?? 0) > 1) throw new ChatgptPlanInputError(`R3Fのkey「${key}」が複数の部品で重複しています。既存の部品と対応づけられるよう、一意のkeyにしてください`);
   const keys = stableNodeKeys(plan.nodes, anchors);
   if (!root) {
     const created = createEmptyEntity(bundle.scene, null, operation.name);
@@ -188,7 +188,7 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
   const filteredAssets = { ...bundle.assets, assets: Object.fromEntries(Object.entries(bundle.assets.assets).filter(([, asset]) => asset.kind !== "material")) };
   const imported = applyComponentCodeImportPlan({ scene: { ...bundle.scene, rootEntityIds: [], entities: {} }, assets: filteredAssets, projectKind: bundle.project.projectKind, plan });
   const error = imported.diagnostics.find(item => item.severity !== "info");
-  if (error || imported.entityIds.length !== plan.nodes.length) throw new ChatgptPlanInputError(error?.message ?? "R3Fの全ての部品を変換できませんでした");
+  if (error || imported.entityIds.length !== plan.nodes.length) throw new ChatgptPlanInputError(error?.message ?? "R3Fの部品をすべて変換できませんでした");
   check();
   const entityIds = new Map<string, string>();
   for (let index = 0; index < plan.nodes.length; index++) {
@@ -217,7 +217,7 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
       const reusable = actual.kind === "material" && equal(cleanAsset(actual), {
         ...cleanAsset(next), name: actual.name, folderId: actual.folderId, source: actual.source,
       });
-      if (!reusable) throw new ChatgptSceneConflictError("R3Fの保存先Materialが既に使われています。現在の素材を保持して停止しました");
+      if (!reusable) throw new ChatgptSceneConflictError("R3Fが使う予定のMaterialがすでに存在するため、現在の素材を変更せずに停止しました");
       generatedMaterials[id] = JSON.stringify(cleanAsset(actual as MaterialAsset));
       continue;
     }
@@ -235,21 +235,21 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
     nodes[key] = { entityId: id, baseline: JSON.stringify(generated), ...(node.sourceKey && keyCounts.get(node.sourceKey) === 1 ? { identityKey: node.sourceKey } : {}) };
     if (hidden.has(id)) continue;
     const actual = bundle.scene.entities[id];
-    if (actual && !old) throw new ChatgptSceneConflictError("R3Fの保存先Entityが既に使われています。手動編集を保持して停止しました");
+    if (actual && !old) throw new ChatgptSceneConflictError("R3Fが使う予定のEntityがすでに存在するため、手動で編集した内容を残して停止しました");
     entities[id] = old && actual ? mergeEntity(JSON.parse(old.baseline) as SceneEntity, generated, actual, overriddenMaterials) : generated;
   }
   const wanted = new Set(Object.values(nodes).map(node => node.entityId));
   for (const node of Object.values(previous?.nodes ?? {})) if (!wanted.has(node.entityId)) {
     const actual = entities[node.entityId];
     if (!actual) continue;
-    if (!equal(actual, JSON.parse(node.baseline))) throw new ChatgptSceneConflictError(`「${actual.name}」は手動編集されています。削除せず、その内容を保って制作を停止しました`);
+    if (!equal(actual, JSON.parse(node.baseline))) throw new ChatgptSceneConflictError(`「${actual.name}」は手動で編集されているため、削除せずにそのまま残して制作を停止しました`);
     delete entities[node.entityId];
   }
   // Reconstruct hierarchy from the merged parent IDs. Current order wins for
   // existing children; newly generated children append in code order.
   const children = new Map<string, string[]>();
   for (const entity of Object.values(entities)) if (entity.parentId) {
-    if (!entities[entity.parentId]) throw new ChatgptSceneConflictError("手動編集した子Entityの親を削除できません。現在の階層を保持して停止しました");
+    if (!entities[entity.parentId]) throw new ChatgptSceneConflictError("手動で追加・編集した子Entityの親は削除できないため、現在の階層を残して制作を停止しました");
     const list = children.get(entity.parentId) ?? []; list.push(entity.id); children.set(entity.parentId, list);
   }
   for (const entity of Object.values(entities)) {
@@ -270,7 +270,7 @@ export async function applyChatgptR3fScene(bundle: PrototypeVisualProject, opera
   const beforeEntities = { ...bundle.scene.entities, [rootId]: previousRoot };
   const afterEntities = { ...entities, [rootId]: visualRoot };
   if (previous && equal(beforeEntities, afterEntities) && equal(bundle.assets.assets, assets)) return { bundle, entityId: rootId };
-  if (!isR3fSceneAuthoring(authoring)) throw new ChatgptPlanInputError("R3Fの制作原本が保存上限を超えています。制作する部品を減らしてください");
+  if (!isR3fSceneAuthoring(authoring)) throw new ChatgptPlanInputError("R3Fの元データが保存上限を超えています。部品の数を減らしてください");
   entities[rootId] = { ...entities[rootId], codeAuthoring: authoring };
   const roots = [...working.scene.rootEntityIds.filter(id => entities[id] && !entities[id].parentId)];
   for (const entity of Object.values(entities)) if (!entity.parentId && !roots.includes(entity.id)) roots.push(entity.id);

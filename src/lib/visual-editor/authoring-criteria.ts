@@ -19,12 +19,12 @@ export function parseChatgptSceneReview(value: unknown, required: readonly strin
     || typeof value.approved !== "boolean" || !text(value.summary, 600) || !text(value.remainingWork, 1200, true)
     || !Array.isArray(value.criteria) || value.criteria.some(verdict => !object(verdict)
       || Object.keys(verdict).some(key => !["criterion", "passed", "reason"].includes(key))
-      || !text(verdict.criterion, 240) || typeof verdict.passed !== "boolean" || !text(verdict.reason, 600))) throw new Error("ワールドの完成条件ごとの見直し結果を確認できませんでした");
+      || !text(verdict.criterion, 240) || typeof verdict.passed !== "boolean" || !text(verdict.reason, 600))) throw new Error("完成条件ごとの確認結果を読み取れませんでした");
   const criteria = value.criteria as AuthoringCriterionVerdict[];
   const gate = checkAuthoringCriteria(required, criteria);
   if (criteria.length !== required.length || criteria.some((verdict, index) => verdict.criterion !== required[index])
     || value.approved !== gate.complete || value.approved && value.remainingWork !== "" || !value.approved && !value.remainingWork.trim()) {
-    throw new Error("元の完成条件を一件ずつ確認し、すべて満たす場合だけ完成と判断してください");
+    throw new Error("元の完成条件を1件ずつ確認し、すべて満たしている場合だけ完成にしてください");
   }
   return { approved: value.approved, summary: value.summary, remainingWork: value.remainingWork, criteria: criteria.map(verdict => ({ ...verdict })) };
 }

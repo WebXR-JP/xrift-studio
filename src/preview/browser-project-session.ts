@@ -16,12 +16,12 @@ type SessionBackend = {
 /** A lease is held for the editor lifetime, including suspended Safari tabs. */
 export async function acquireBrowserProjectLease(path: string): Promise<() => void> {
   if (!navigator.locks) {
-    throw new Error("このブラウザでは安全に編集を開始できません。Safariなどのブラウザを最新版に更新してください。");
+    throw new Error("このブラウザでは安全に編集を始められません。お使いのブラウザを最新版に更新してお試しください。");
   }
   return new Promise((resolve, reject) => {
     void navigator.locks.request(`xrift-studio:${path}`, { mode: "exclusive", ifAvailable: true }, (lock) => {
       if (!lock) {
-        reject(new Error("このプロジェクトは別のタブで編集中です。そちらで紹介ページへ戻るかタブを閉じてから、もう一度開いてください。"));
+        reject(new Error("このプロジェクトは別のタブで開いています。別のタブで紹介ページへ戻るかタブを閉じてから、もう一度開いてください。"));
         return;
       }
       return new Promise<void>((release) => resolve(release));
@@ -56,7 +56,7 @@ export async function openBrowserProjectSession(path: string, backend: SessionBa
   let closing: Promise<void> | undefined;
   let latestPublication = documents.project.lastPublication;
   const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
-    if (closed) return Promise.reject(new Error("プロジェクトは閉じられています。現在のプロジェクトから操作し直してください。"));
+    if (closed) return Promise.reject(new Error("このプロジェクトはすでに閉じられています。開き直してから操作してください。"));
     const result = pending.then(operation);
     // Failure is reported to its caller, but does not poison the next save.
     pending = result.catch(() => {});

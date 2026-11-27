@@ -40,7 +40,7 @@ pub fn save_package_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let mut file = match options.open(&temporary) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(format!("一時ファイルを作れません: {error}")),
+            Err(error) => return Err(format!("一時ファイルを作成できません: {error}")),
         };
         let result = (|| {
             file.write_all(bytes).map_err(|error| format!("ファイルを書き込めません: {error}"))?;
@@ -52,7 +52,7 @@ pub fn save_package_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         if result.is_err() { let _ = fs::remove_file(&temporary); }
         return result;
     }
-    Err("一時ファイルを作れません。保存先を選び直してください。".into())
+    Err("一時ファイルを作成できません。保存先を選び直してください。".into())
 }
 
 #[cfg(test)]

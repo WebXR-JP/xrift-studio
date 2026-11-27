@@ -93,7 +93,7 @@ impl OsCredentialStore {
             target_os = "macos",
             target_os = "linux"
         )) {
-            return Err("この端末ではChatGPTの接続を安全に保存できません".into());
+            return Err("この端末ではChatGPTの接続情報を安全に保存できません".into());
         }
         Ok(())
     }
@@ -118,7 +118,7 @@ async fn vault_read(
 ) -> Result<Option<String>, String> {
     tokio::task::spawn_blocking(move || store.read(entry))
         .await
-        .map_err(|_| "保存した接続を読み取れませんでした".to_string())?
+        .map_err(|_| "保存された接続情報を読み取れませんでした".to_string())?
 }
 async fn vault_write(
     store: Arc<dyn CredentialStore>,
@@ -127,12 +127,12 @@ async fn vault_write(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || store.write(entry, &value))
         .await
-        .map_err(|_| "接続を保存できませんでした".to_string())?
+        .map_err(|_| "接続情報を保存できませんでした".to_string())?
 }
 async fn vault_delete(store: Arc<dyn CredentialStore>) -> Result<(), String> {
     tokio::task::spawn_blocking(move || store.delete(SESSION_ENTRY))
         .await
-        .map_err(|_| "保存した接続を削除できませんでした".to_string())?
+        .map_err(|_| "保存された接続情報を削除できませんでした".to_string())?
 }
 fn registration(session: &Session) -> Registration {
     Registration {
@@ -161,18 +161,18 @@ fn saved_session(session: &Session) -> Result<String, String> {
         scopes: session.scopes.clone(),
         refresh_expires_at: now().saturating_add(REFRESH_LIFETIME),
     })
-    .map_err(|_| "接続を保存できませんでした".into())
+    .map_err(|_| "接続情報を保存できませんでした".into())
 }
 fn decode_saved_session(value: &str) -> Result<Session, String> {
     let saved: SavedSession = serde_json::from_str(value)
-        .map_err(|_| "保存したChatGPTの接続が不正です。再接続してください")?;
+        .map_err(|_| "保存されているChatGPTの接続情報が不正です。再接続してください")?;
     if saved.version != 1
         || !valid_registration(&saved.registration)
         || saved.refresh_token.is_empty()
         || saved.refresh_token.len() > 16_384
         || saved.refresh_expires_at <= now()
     {
-        return Err("保存したChatGPTの接続の有効期限が切れています。再接続してください".into());
+        return Err("保存されているChatGPT接続の有効期限が切れています。再接続してください".into());
     }
     Ok(Session {
         client_id: saved.registration.client_id,
@@ -411,7 +411,7 @@ fn client(timeout: u64) -> Result<reqwest::Client, String> {
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(timeout))
         .build()
-        .map_err(|_| "ChatGPTの接続を準備できませんでした".into())
+        .map_err(|_| "ChatGPTへの接続を準備できませんでした".into())
 }
 fn form_body(fields: &[(&str, &str)]) -> String {
     let mut url = reqwest::Url::parse("https://form.invalid").unwrap();
@@ -505,19 +505,19 @@ fn parse_callback(
         .map_err(|_| "認証の応答が不正です".to_string())?;
     let args: std::collections::HashMap<_, _> = uri.query_pairs().into_owned().collect();
     if uri.path() != "/auth/callback" || args.get("state").map(String::as_str) != Some(state) {
-        return Err("認証の状態が一致しません".into());
+        return Err("認証状態が一致しません".into());
     }
     if args.contains_key("error") {
         return Err("ChatGPTへの接続がキャンセルされました".into());
     }
     let issued = args.get("client_id").map(String::as_str);
     if previous.is_some() && issued.is_some() && previous != issued {
-        return Err("認証先の登録が一致しません".into());
+        return Err("認証先の登録情報が一致しません".into());
     }
     let id = previous
         .or(issued)
         .filter(|v| !v.is_empty() && *v != "dynamic_agent_client")
-        .ok_or("認証先の登録を確認できませんでした")?;
+        .ok_or("認証先の登録情報を確認できませんでした")?;
     let code = args
         .get("code")
         .filter(|v| !v.is_empty())
@@ -545,7 +545,7 @@ fn verify_identity_with_nonce(
     let header = decode(parts[0])?;
     let claims = decode(parts[1])?;
     if header["alg"] != "RS256" {
-        return Err(identity_error("署名方式が対応していません"));
+        return Err(identity_error("未対応の署名方式です"));
     }
     validate_identity_claims_with_nonce(&claims, client_id, nonce)?;
     let key = keys["keys"]
@@ -697,7 +697,7 @@ impl RefreshTransport for OpenAiRefreshTransport {
                 })?;
             let status = response.status().as_u16();
             let token: Value = response.json().await.map_err(|_| {
-                RefreshFailure::temporary("ChatGPTの更新応答を読み取れませんでした")
+                RefreshFailure::temporary("ChatGPTからの更新応答を読み取れませんでした")
             })?;
             Ok((status, token))
         })
@@ -768,7 +768,7 @@ async fn refresh_session(
     if !(200..300).contains(&status) {
         if terminal_refresh_error(&token) {
             return Err(RefreshFailure::terminal(
-                "ChatGPTの接続の有効期限が切れているか、解除されています。再接続してください",
+                "ChatGPT接続の有効期限が切れているか、接続が解除されています。再接続してください",
             ));
         }
         return Err(RefreshFailure::temporary(format!(
@@ -781,7 +781,7 @@ async fn refresh_session(
     update_token(&mut next, &token).map_err(RefreshFailure::terminal)?;
     if next.expires_at <= now() || token["refresh_token"].as_str().is_none_or(str::is_empty) {
         return Err(RefreshFailure::terminal(
-            "ChatGPTの更新応答が不正です。再接続してください",
+            "ChatGPTからの更新応答が不正です。再接続してください",
         ));
     }
     // A replacement invalidates the previous refresh credential. Persist it
@@ -979,7 +979,7 @@ async fn revoke_session(session: &Session) -> Result<(), String> {
         return Ok(());
     };
     let failed = || {
-        "Studioの接続は解除しましたが、ChatGPT側の解除を確認できませんでした。ChatGPTの設定でアプリの接続状態を確認してください".to_string()
+        "XRift Studio側の接続は解除しましたが、ChatGPT側の解除を確認できませんでした。ChatGPTの設定でアプリの接続状態を確認してください".to_string()
     };
     let http = client(15)?;
     let metadata = response_json(
@@ -1082,12 +1082,12 @@ async fn authorize(
     let verifier = random()?;
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .map_err(|_| "認証の受信を開始できませんでした".to_string())?;
+        .map_err(|_| "認証応答の受信を開始できませんでした".to_string())?;
     let redirect = format!(
         "http://127.0.0.1:{}/auth/callback",
         listener
             .local_addr()
-            .map_err(|_| "認証の受信先を確認できませんでした".to_string())?
+            .map_err(|_| "認証応答の受信先を確認できませんでした".to_string())?
             .port()
     );
     let mut url = reqwest::Url::parse(&format!("{AUTH}/api/accounts/authorize")).unwrap();
@@ -1121,11 +1121,11 @@ async fn authorize(
         .map_err(|_| "ログイン用ブラウザを開けませんでした".to_string())?;
     let callback = tokio::time::timeout(Duration::from_secs(180), async {
         loop {
-            let (mut socket, _) = listener.accept().await.map_err(|_| "認証の受信に失敗しました".to_string())?;
+            let (mut socket, _) = listener.accept().await.map_err(|_| "認証応答の受信に失敗しました".to_string())?;
             let request = tokio::time::timeout(Duration::from_secs(3), async {
                 let mut data = Vec::new(); let mut buffer = [0u8; 1024];
                 while data.len() < 8192 {
-                    let n = socket.read(&mut buffer).await.map_err(|_| "認証の応答を読めませんでした")?;
+                    let n = socket.read(&mut buffer).await.map_err(|_| "認証の応答を読み取れませんでした")?;
                     if n == 0 { break; } data.extend_from_slice(&buffer[..n]);
                     if data.windows(4).any(|w| w == b"\r\n\r\n") { break; }
                 }
@@ -1163,7 +1163,7 @@ async fn authorize(
     let keys = identity_keys(&http).await?;
     let jwt = token["id_token"]
         .as_str()
-        .ok_or("本人確認の応答がありません")?;
+        .ok_or("本人確認の情報がありません")?;
     let claims = verify_identity(jwt, &callback.1, &nonce, &keys)?;
     if previous
         .as_ref()
@@ -1289,14 +1289,14 @@ fn validate_authoring_model(
     let model = models
         .iter()
         .find(|model| model.slug == slug)
-        .ok_or("選択したモデルをこのアカウントで利用できません")?;
+        .ok_or("選択したモデルはこのアカウントで利用できません")?;
     if reasoning_effort.is_some_and(|effort| {
         !model
             .supported_reasoning_efforts
             .iter()
             .any(|v| v.as_str() == effort)
     }) {
-        return Err("選択したモデルはこの思考量に対応していません。モデルの既定を使うか、対応する思考量を選び直してください".into());
+        return Err("選択したモデルはこの思考量に対応していません。モデルの既定値を使うか、対応する思考量を選び直してください".into());
     }
     Ok(())
 }
@@ -1350,7 +1350,7 @@ fn ensure_authorization_complete(state: &ChatgptState) -> Result<(), String> {
         .map_err(|_| "接続状態を確認できませんでした")?
         .restoring
     {
-        return Err("保存したChatGPTの接続を確認しています。完了後に実行してください".into());
+        return Err("保存されているChatGPTの接続を確認しています。完了後に実行してください".into());
     }
     Ok(())
 }

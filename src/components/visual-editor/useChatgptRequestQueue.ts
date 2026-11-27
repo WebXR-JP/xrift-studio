@@ -30,7 +30,7 @@ export function useChatgptRequestQueue(input: QueueInput) {
   const resolvedModel = first?.model || input.selectedModel;
   const modelProblem = first ? input.modelProblem(first, resolvedModel) : undefined;
   const blockedReason = queue.pauseReason ?? input.blockedReason ?? modelProblem
-    ?? (snapshot.active && snapshot.active.scope !== input.scope ? "別のSceneの依頼が終了するまで送信を待っています。" : undefined);
+    ?? (snapshot.active && snapshot.active.scope !== input.scope ? "別のSceneで実行中の依頼が終わるまで送信を待っています。" : undefined);
 
   useEffect(() => {
     const draftLease = snapshot.drafts[input.sceneScope] ?? snapshot.active;

@@ -131,7 +131,7 @@ export function MaterialBulkTextureControl({ materialPath, label, description, v
       </select>
     </label>
     {value || field.mixed ? <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
-      <p className="text-[11px] text-slate-500">画像の選択では各素材のUVを保ちます。UVの変更は、画像を割り当て済みの素材に反映します。</p>
+      <p className="text-[11px] text-slate-500">画像を差し替えても各素材のUV設定はそのまま残ります。UVの変更は、画像を割り当て済みの素材に反映されます。</p>
       <MaterialBulkNumberControl materialPath={`${materialPath}.texCoord`} label={`${label} UVセット`} value={value?.texCoord ?? 0} min={0} step={1} disabled={disabled} />
       <div className="grid grid-cols-2 gap-2">{(["offset", "scale"] as const).map(key => (["X", "Y"] as const).map((axis, index) =>
         <MaterialBulkNumberControl key={`${key}.${index}`} materialPath={`${materialPath}.transform.${key}.${index}`} label={`${label} ${key === "offset" ? "ずらす量" : "繰り返し"} ${axis}`}

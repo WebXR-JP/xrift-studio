@@ -16,7 +16,7 @@ export function recordFailedRun(manager: SessionManager, message: string, reques
   const safe = [...manager.getBranch()].reverse().find(resumeBoundary);
   if (safe) manager.branch(safe.id); else manager.resetLeaf();
   manager.appendMessage({ role: "custom", customType: "studio-run-outcome", display: false, timestamp: Date.now(),
-    content: `直前の依頼・回答：\n${request}\n\nStudioは直前の依頼を完了として受け付けませんでした。理由：${message}\n保存済みの変更や手動編集は残っています。次の依頼では現在のSceneを読み直し、未確認の結果を完了済みと扱わないでください。` });
+    content: `直前の依頼・回答：\n${request}\n\n直前の依頼は完了として確定できませんでした。理由：${message}\n保存済みの変更や手動編集はそのまま残っています。次の依頼では現在のSceneを読み直し、未確認の結果を完了済みにしないでください。` });
 }
 export async function openHistory(stored?: StoredSession): Promise<SessionManager> {
   if (!stored) return SessionManager.inMemory();
@@ -28,7 +28,7 @@ export async function openHistory(stored?: StoredSession): Promise<SessionManage
   const manager = SessionManager.open(stored.path, dirname(stored.path), dirname(stored.path));
   if (stored.leafId) {
     const entry = manager.getEntry(stored.leafId);
-    if (!entry || !resumeBoundary(entry)) throw new Error("選んだ履歴は見つからないか、応答の途中です。完了した応答を選んでください");
+    if (!entry || !resumeBoundary(entry)) throw new Error("指定した履歴が見つからないか、応答の途中です。完了した応答を選んでください");
     manager.branch(stored.leafId);
   } else {
     // A process can stop between a tool call and its reply. Never restore an

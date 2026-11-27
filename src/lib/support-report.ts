@@ -65,13 +65,15 @@ export function createSupportReportDraft(
 ): string {
   const project = context?.project;
   const subject = project
-    ? `プロジェクト「${project.name}」で${context?.currentScreen ?? "エラー"}が発生しました。`
+    ? context?.currentScreen
+      ? `プロジェクト「${project.name}」の${context.currentScreen}でエラーが発生しました。`
+      : `プロジェクト「${project.name}」でエラーが発生しました。`
     : `${context?.currentScreen ?? "現在の画面"}でエラーが発生しました。`;
   const projectDetails = project?.description
     ? `\nプロジェクト一覧では「${project.description}」と表示されています。`
     : "";
   const projectStep = project
-    ? `プロジェクトライブラリで「${project.name}」を選ぶ`
+    ? `プロジェクト一覧で「${project.name}」を選ぶ`
     : "問題が発生した画面を開く";
   const actualError = errorMessage
     ? `\n\n発生したエラー: \`${errorMessage}\``
@@ -83,8 +85,8 @@ ${subject}${projectDetails}
 ## 再現手順または利用シーン
 1. ${projectStep}
 2. ${context?.failureTiming ?? context?.currentScreen ?? "対象の画面"}を開く
-3.初期表示・読み込み中にエラーが発生し、エラー画面へ切り替わる
-4.再試行しても同じ状態になる
+3. 初期表示・読み込み中にエラーが発生し、エラー画面へ切り替わる
+4. 再試行しても同じ状態になる
 
 ## 期待する結果
 対象の画面が正常に表示され、制作を続けられること。

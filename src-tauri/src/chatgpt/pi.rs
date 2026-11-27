@@ -38,7 +38,7 @@ pub async fn chatgpt_pi_message(
         let active = active.as_ref().ok_or("制作の準備中か応答が終了しています。入力を残したまま、もう一度送信してください")?;
         if active.generation_id != generation_id || active.project_id != project_id || active.scene_id != scene_id
             || active.session_id != session_id || active.control.cancelled.load(Ordering::Acquire) {
-            return Err("追加指示の対象が変わりました。開いているSceneとチャットを確認してください".into());
+            return Err("追加指示の対象が変わりました。開いているシーンとチャットを確認してください".into());
         }
         active.sender.send(super::pi_transport::Input {
             message: json!({"id":id, "prompt":prompt, "delivery":delivery, "attachedEntityIds":attached_entity_ids, "attachedMaterialIds":attached_material_ids}),
@@ -73,12 +73,12 @@ pub async fn chatgpt_pi_delete_history(
 ) -> Result<(), String> {
     let _lease = begin_generation(&state, None)?;
     if !valid_history_id(&session_id) || project_id.is_empty() || scene_id.is_empty() {
-        return Err("会話の履歴を指定する情報を読み取れませんでした。チャットを選び直してください".into());
+        return Err("会話履歴の指定を読み取れませんでした。チャットを選び直してください".into());
     }
     let path = app
         .path()
         .app_data_dir()
-        .map_err(|_| "制作の保存先を開けません")?
+        .map_err(|_| "制作データの保存先を開けません")?
         .join("pi")
         .join("sessions")
         .join(digest_key(&[&project_id, &scene_id]))
@@ -87,7 +87,7 @@ pub async fn chatgpt_pi_delete_history(
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(_) => {
-            Err("制作の詳細履歴を削除できませんでした。履歴を保持したまま再試行してください".into())
+            Err("制作の詳細履歴を削除できませんでした。履歴を残したまま再試行してください".into())
         }
     }
 }
@@ -149,12 +149,12 @@ fn runner_path(app: &AppHandle) -> Result<PathBuf, String> {
     let path = app
         .path()
         .resource_dir()
-        .map_err(|_| "制作のリソース保存先を確認できませんでした")?
+        .map_err(|_| "制作ツールのリソース保存先を確認できませんでした")?
         .join("pi/dist/stdio.js");
     if path.is_file() {
         Ok(path)
     } else {
-        Err("制作の実行ファイルがありません。Studioをビルドし直してください".into())
+        Err("制作ツールの実行ファイルが見つかりません。XRift Studioをビルドし直してください".into())
     }
 }
 #[tauri::command]
@@ -195,7 +195,7 @@ pub async fn chatgpt_pi_run(
             .as_deref()
             .is_some_and(|id| !valid_history_id(id))
     {
-        return Err("会話の履歴を指定する情報を読み取れませんでした。チャットを選び直してください".into());
+        return Err("会話履歴の指定を読み取れませんでした。チャットを選び直してください".into());
     }
     serde_json::from_str::<Value>(&context).map_err(|_| "制作条件のJSONが不正です")?;
     ensure_authorization_complete(&state)?;
@@ -214,7 +214,7 @@ pub async fn chatgpt_pi_run(
     let pi_root = app
         .path()
         .app_data_dir()
-        .map_err(|_| "制作の保存先を開けません")?
+        .map_err(|_| "制作データの保存先を開けません")?
         .join("pi");
     let session_path = pi_root
         .join("sessions")
@@ -231,8 +231,8 @@ pub async fn chatgpt_pi_run(
     let mut child = command
         .spawn()
         .map_err(|_| "制作処理を起動できませんでした。制作ツールのセットアップを確認してください")?;
-    let stdin = child.stdin.take().ok_or("制作の入力を開けませんでした")?;
-    let stdout = child.stdout.take().ok_or("制作の出力を開けませんでした")?;
+    let stdin = child.stdin.take().ok_or("制作処理の入力を開けませんでした")?;
+    let stdout = child.stdout.take().ok_or("制作処理の出力を開けませんでした")?;
     let definitions = tools();
     let preview_progress = on_progress.clone();
     let _previews = crate::blender_modeling::subscribe_previews(&generation_id, Arc::new(move |event| { let _ = preview_progress.send(event); }));
@@ -268,7 +268,7 @@ pub async fn chatgpt_pi_run(
                         .get(key)
                         .is_some_and(|value| value.as_str() != Some(expected))
                     {
-                        return Err("開いている作品やScene以外への操作を止めました".into());
+                        return Err("開いている作品やシーン以外への操作を止めました".into());
                     }
                 }
                 let scope = json!({ "projectId": project_id, "sceneId": scene_id });
@@ -282,7 +282,7 @@ pub async fn chatgpt_pi_run(
                     cancelled,
                 )
                 .await?;
-                serde_json::to_value(response).map_err(|_| "Editorの応答を作れませんでした".into())
+                serde_json::to_value(response).map_err(|_| "エディターの応答を作成できませんでした".into())
             }
         },
         |message| {

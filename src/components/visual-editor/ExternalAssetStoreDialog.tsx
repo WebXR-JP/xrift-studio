@@ -711,7 +711,7 @@ export function ExternalAssetStoreDialog({
                   <div role="group" aria-label="プレビューの背景" className="flex gap-1">
                     {([ ["checker", "透過"], ["light", "明るい"], ["dark", "暗い"] ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={textureBackground === value} onClick={() => setTextureBackground(value)} className={`min-h-9 rounded-md border px-3 text-xs ${textureBackground === value ? "border-brand-400 bg-brand-50 text-brand-800" : "border-slate-300 bg-white text-slate-700"}`}>{label}</button>)}
                   </div>
-                  <p className="text-[11px] leading-5 text-slate-500">30点すべて透過PNGです。Assetsへの追加で元のPNGと透過設定済みMaterialを保存します。</p>
+                  <p className="text-[11px] leading-5 text-slate-500">30点すべて透過PNGです。Assetsへ追加すると、元のPNGと透過設定済みのマテリアルを保存します。</p>
                   {tauri.isAvailable() ? <button type="button" onClick={() => openLink(`https://raw.githubusercontent.com/WebXR-JP/xrift-studio/main/public/visual-editor/transparent-textures/v1/${selected.externalId}.png`)} className="inline-flex min-h-9 items-center rounded-md border border-slate-300 px-3 text-xs font-semibold text-slate-700">PNGをブラウザで開く</button> : <a href={selected.thumbnailUrl} download={`${selected.externalId}.png`} className="inline-flex min-h-9 items-center rounded-md border border-slate-300 px-3 text-xs font-semibold text-slate-700">PNGを保存</a>}
                 </div> : null}
                 <div>
@@ -834,7 +834,7 @@ export function ExternalAssetStoreDialog({
                           ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
                         </p>
                         <Notice text={provider.id === "shared-material-library"
-                          ? "選択したPNGをTextureとして保存します。"
+                          ? "選択したPNGをテクスチャとして保存します。"
                           : "テクスチャを割り当てたマテリアルを作成します。"} />
                       </>
                     )}
@@ -842,7 +842,7 @@ export function ExternalAssetStoreDialog({
                 )}
                 {selected.assetKind === "model" && modelAttachmentTarget ? <label className="flex items-start gap-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-700">
                   <input type="checkbox" checked={applyModelToEntity} disabled={installing || Boolean(disabledReason)} onChange={event => setApplyModelToEntity(event.target.checked)} className="mt-0.5 size-3.5 shrink-0 accent-brand-600" />
-                  <span><span className="block font-semibold">追加後に「{modelAttachmentTarget.name}」へモデルを設定</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">Entityの名前・位置・回転・大きさを保ちます。モデルはAssetsにも残ります。</span></span>
+                  <span><span className="block font-semibold">追加後に「{modelAttachmentTarget.name}」へモデルを設定</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">Entityの名前・位置・回転・大きさはそのまま残ります。モデル自体はAssetsにも保存されます。</span></span>
                 </label> : null}
                 {!projectPath ? (
                   <Notice tone="warning" text="初回の自動保存が完了すると追加できます。保存エラーが出た場合は、編集画面で確認してください。" />

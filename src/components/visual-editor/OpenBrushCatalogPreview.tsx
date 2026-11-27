@@ -119,9 +119,9 @@ export function OpenBrushCatalogPreview({
             }`}
           >
             {loadState.status === "ready"
-              ? "three-icosa実ストローク"
+              ? "three-icosaの筆跡"
               : loadState.status === "error"
-                ? "Shaderの読み込み失敗"
+                ? "シェーダーの読み込み失敗"
                 : "ブラシを再構築中"}
           </span>
           <span className="pointer-events-none absolute inset-x-2 bottom-1.5 text-center text-[9px] text-slate-300/80">
@@ -239,7 +239,7 @@ async function loadOpenBrushGalleryScene(): Promise<Group> {
   })
     .then(async (response) => {
       if (!response.ok) {
-        throw new Error(`Open Brush galleryを読み込めませんでした (${response.status})`);
+        throw new Error(`Open Brushギャラリーを読み込めませんでした (${response.status})`);
       }
       const source = prepareOpenBrushGltfSource(
         new Uint8Array(await response.arrayBuffer()),
@@ -261,7 +261,7 @@ function fitStroke(source: Object3D): Group {
   centered.add(source);
   source.updateWorldMatrix(true, true);
   const bounds = new Box3().setFromObject(source);
-  if (bounds.isEmpty()) throw new Error("Open Brush strokeに描画可能な形状がありません");
+  if (bounds.isEmpty()) throw new Error("Open Brushの筆跡に描画できる形状がありません");
   const center = bounds.getCenter(new Vector3());
   const size = bounds.getSize(new Vector3());
   centered.position.copy(center).multiplyScalar(-1);

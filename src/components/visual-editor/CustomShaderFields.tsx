@@ -381,9 +381,9 @@ export function ShaderVariantSettings({
         const blending = variant.blending ?? "normal";
         const culled = variant.frustumCulled !== false;
         const target = variant.meshNameIncludes
-          ? `${variant.name}（名前に「${variant.meshNameIncludes}」を含むMesh）`
+          ? `${variant.name}（名前に「${variant.meshNameIncludes}」を含むメッシュ）`
           : variants.length > 1
-            ? `${variant.name}（ほかのMesh）`
+            ? `${variant.name}（ほかのメッシュ）`
             : null;
         return (
           <div key={`${index}:${variant.name}`} className="space-y-1.5">
@@ -444,7 +444,7 @@ export function ShaderVariantSettings({
               <span>
                 Depth Write
                 <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
-                  深度を書き込みます。光や煙のように重ねて見せるものでは切ります。
+                  深度を書き込みます。光や煙のように重ねて見せるものではオフにします。
                 </span>
               </span>
               <input
@@ -463,7 +463,7 @@ export function ShaderVariantSettings({
               <span>
                 Frustum Culling
                 <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
-                  画面の外にあるMeshの描画を省きます。頂点シェーダーでMeshを別の場所へ動かす場合は切ってください。
+                  画面の外にあるメッシュの描画を省きます。頂点シェーダーでメッシュを別の場所へ動かす場合はオフにしてください。
                 </span>
               </span>
               <input

@@ -17,7 +17,7 @@ export const PiRunDetails = memo(function PiRunDetails({ text, usage, running }:
         <dt>入力 / 出力</dt><dd>{number.format(usage.inputTokens)} / {number.format(usage.outputTokens)}</dd>
         <dt>保存済みデータの再利用 / 保存</dt><dd>{number.format(usage.cacheReadTokens)} / {number.format(usage.cacheWriteTokens)}</dd>
       </dl>
-      <p className="mt-2 leading-5">トークンはAIが文章や画像を扱うときの単位で、文字数とは異なります。再利用と保存の値もトークン数です。表示した回数は、制作を止める上限ではありません。</p>
+      <p className="mt-2 leading-5">トークンはAIが文章や画像を処理する単位で、文字数とは異なります。再利用と保存の値もトークン数です。表示されている回数は制作の上限ではありません。</p>
     </details> : null}
   </>;
 });

@@ -38,7 +38,7 @@ function freeze<T>(value: T): T {
   if (value && typeof value === "object") { for (const entry of Object.values(value)) freeze(entry); Object.freeze(value); }
   return value;
 }
-function invalid(): never { throw new ChatgptHarnessError("invalid-snapshot", "制作の実行記録を読み込めません。最新のSceneから制作を再開してください。"); }
+function invalid(): never { throw new ChatgptHarnessError("invalid-snapshot", "制作の実行記録を読み込めませんでした。最新のSceneからやり直してください。"); }
 function resolveLimits(value: unknown): ChatgptHarnessLimits {
   const fields = Object.keys(limitCeilings) as (keyof ChatgptHarnessLimits)[];
   if (!object(value) || !keys(value, fields)) invalid();
@@ -96,7 +96,7 @@ export function normalizeChatgptHarnessSnapshot(value: unknown): ChatgptHarnessS
 /** Process restart never restores automatic execution authority. */
 export function interruptChatgptHarnessSnapshot(value: unknown, reason = "interrupted"): ChatgptHarnessSnapshot {
   const restored = normalizeChatgptHarnessSnapshot(value);
-  if (!text(reason, 240)) throw new ChatgptHarnessError("invalid-input", "停止理由が不正です。");
+  if (!text(reason, 240)) throw new ChatgptHarnessError("invalid-input", "停止理由の形式が正しくありません。");
   if (!["running", "stopping"].includes(restored.phase)) return restored;
   const next = structuredClone(restored);
   next.phase = "cancelled"; next.reason = reason;

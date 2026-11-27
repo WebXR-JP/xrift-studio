@@ -19,7 +19,7 @@ lines.on("line", line => {
       }), send, undefined, undefined, { attach: handler => { acceptInput = handler; return () => { acceptInput = undefined; }; } }).then(result => send({ type: "result", result })).catch(error => send({ type: "error", message: String(error instanceof Error ? error.message : error).replaceAll(message.input.token, "[redacted]").slice(0, 2000) })).finally(() => { lines.close(); process.stdin.destroy(); });
     } else if (message.type === "input") {
       const handler = acceptInput;
-      void (handler ? handler(message.message) : Promise.reject(new Error("制作の準備中か応答が終了しています。入力を残したまま、もう一度送信してください")))
+      void (handler ? handler(message.message) : Promise.reject(new Error("制作の準備中か、応答がすでに終了しています。入力を残したまま、もう一度送信してください")))
         .then(() => send({ type: "input_ack", id: message.id, ok: true }))
         .catch(error => send({ type: "input_ack", id: message.id, ok: false, message: error instanceof Error ? error.message : "追加指示を送信できませんでした" }));
     } else if (message.type === "tool_result") {
@@ -27,5 +27,5 @@ lines.on("line", line => {
       if (message.ok) task?.resolve(message.result ?? {});
       else task?.reject(new Error(`${message.error?.code ?? "EDITOR_ERROR"}: ${message.error?.message ?? "Studio tool failed"}`));
     }
-  } catch { send({ type: "error", message: "制作の通信内容を読み取れませんでした" }); lines.close(); process.stdin.destroy(); }
+  } catch { send({ type: "error", message: "制作チャットとの通信内容を読み取れませんでした" }); lines.close(); process.stdin.destroy(); }
 });

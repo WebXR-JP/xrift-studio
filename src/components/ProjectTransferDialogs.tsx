@@ -235,7 +235,7 @@ export function DuplicateProjectDialog({
     >
       <p className="mt-1 text-xs text-zinc-600">
         「{project.title || project.name}」を別名のフォルダーにコピーします。
-        コピーしたプロジェクトは未公開の状態になります。公開すると新しい公開先が作られ、元のプロジェクトの公開先はそのまま残ります。
+        複製したプロジェクトは未公開の状態になるため、公開すると新しい公開先が作られ、元の公開先には影響しません。
       </p>
       <NameField
         value={name}
@@ -361,7 +361,7 @@ export function ImportProjectArchiveDialog({
       <p className="mt-3 text-[11px] text-zinc-500">
         取り込んだプロジェクトは未公開の状態から始まります。
         {inspection.format === "classic"
-          ? " コードプロジェクトにはnode_modulesが含まれません。最初の動作確認の前に、プロジェクトフォルダーで必要なパッケージをインストールしてください。"
+          ? " コードプロジェクトにはnode_modulesが含まれないため、最初に動作確認する前にプロジェクトフォルダーで必要なパッケージをインストールしてください。"
           : ""}
       </p>
       <ErrorNote error={error} />
@@ -431,8 +431,7 @@ export function ImportProjectRepositoryDialog({
       }
     >
       <p className="mt-1 text-xs text-zinc-600">
-        リポジトリの直下にxrift-studio.project.jsonかxrift.jsonがあるプロジェクトを、
-        プロジェクトの保存先へ新しいプロジェクトとしてコピーします。Gitの履歴は含まれません。
+        リポジトリ直下にxrift-studio.project.jsonまたはxrift.jsonがある作品を、新しいプロジェクトとして保存先へコピーします。Gitの履歴は含まれません。
       </p>
       <label className="mt-4 block">
         <span className="text-sm font-medium text-zinc-700">リポジトリのURL</span>

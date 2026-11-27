@@ -86,7 +86,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
         check();
         const values = args as Record<string, unknown>;
         for (const [key, expected] of [["projectId", input.projectId], ["sceneId", input.sceneId]] as const) {
-          if (values[key] !== undefined && values[key] !== expected) throw new Error("別の作品・Sceneへは操作できません");
+          if (values[key] !== undefined && values[key] !== expected) throw new Error("別の作品やSceneは操作できません");
         }
         const label = labels[definition.name] ?? "制作の操作";
         emit({ type: "progress", operationId, tool: definition.name, readOnly: definition.readOnly, message: `${label}を進めています` });
@@ -104,7 +104,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
         if (definition.name === "get_project_health") health = value.health?.status !== "error" && !(value.health?.issues ?? []).some((issue: any) => issue.severity === "blocking") ? value.fingerprint : undefined;
         emit({ type: "progress", operationId, tool: definition.name, readOnly: definition.readOnly, changed,
           saved: definition.name === "save_scene", mutationBeforeFingerprint: value.mutationBeforeFingerprint,
-          message: definition.name === "save_scene" ? "現在のSceneを保存しました" : `${label}を終えました` });
+          message: definition.name === "save_scene" ? "現在のSceneを保存しました" : `${label}が完了しました` });
         const { image: rendered, ...data } = value;
         return { content: [...result(data).content, ...(rendered?.data && rendered?.mimeType ? [{ type: "image" as const, data: rendered.data, mimeType: rendered.mimeType }] : [])],
           ...(definition.name === "capture_scene_view" ? {} : { structuredContent: data }), details: {} };
@@ -112,14 +112,14 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     const controls: ToolDefinition[] = [
       define({ name: "studio_plan", label: "制作プラン", description: "Return a read-only plan for user review. This makes no edits.", exposure: "model-only", executionMode: "sequential",
         parameters: Type.Object({ title: Type.String({ minLength: 1, maxLength: 160 }), description: Type.String({ minLength: 1, maxLength: 8000 }) }),
-        execute: async (_id, args) => { check(); if (input.mode !== "plan") throw new Error("制作中です。正式ツールで作業を進めてください"); plan = args; return result({ planned: true }); } }),
+        execute: async (_id, args) => { check(); if (input.mode !== "plan") throw new Error("制作中です。制作ツールを使って作業を進めてください"); plan = args; return result({ planned: true }); } }),
       define({ name: "studio_questions", label: "制作の確認", description: "Ask only a consequential unresolved user decision. Ordinary implementation and verification need no approval. After edits, save the current Scene before asking; retain all completed work for continuation.", exposure: "model-only", executionMode: "sequential",
         parameters: Type.Object({ title: Type.String({ minLength: 1, maxLength: 160 }), description: Type.String({ maxLength: 8000 }), questions: Type.Array(Type.Object({ question: Type.String({ minLength: 1, maxLength: 240 }), choices: Type.Array(Type.String({ minLength: 1, maxLength: 160 }), { minItems: 2, maxItems: 4 }) }), { minItems: 1, maxItems: 3 }) }),
         execute: async (_id, args) => {
           check();
           if (wrote) {
             const current = await host("get_editor_context", {});
-            if (!inScope(current) || current.saveStatus !== "saved" || !saved || current.fingerprint !== saved) throw new Error("質問する前に、現在の変更をsave_sceneで保存してください。保存済みの作業を保持して回答を待ちます");
+            if (!inScope(current) || current.saveStatus !== "saved" || !saved || current.fingerprint !== saved) throw new Error("質問する前に、現在の変更を save_scene で保存してください。保存済みの変更を残したまま回答を待ちます");
           }
           plan = args;
           return result({ waitingForAnswers: true });
@@ -127,9 +127,9 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
       define({ name: "studio_finish", label: "完成条件を確認", description: "Validate current saved Scene, successful Project Health, actual rendered image and each completion criterion. Later edits invalidate evidence.", exposure: "model-only", executionMode: "sequential",
         parameters: Type.Object({ summary: Type.String({ minLength: 1 }), criteria: Type.Array(Type.Object({ criterion: Type.String({ minLength: 1 }), passed: Type.Boolean(), reason: Type.String({ minLength: 1 }) }), { minItems: 1 }) }),
         execute: async (_id, args) => {
-          check(); if (input.mode === "plan") throw new Error("studio_planでプランを返してください");
+          check(); if (input.mode === "plan") throw new Error("studio_plan でプランを返してください");
           const current = await host("get_editor_context", {});
-          if (!inScope(current) || current.saveStatus !== "saved" || !saved || current.fingerprint !== saved || image !== saved || health !== saved || args.criteria.some(item => !item.passed)) throw new Error("完成条件を満たしていません。最新のSceneを保存し、整合性と描画画像を確認して修正してください");
+          if (!inScope(current) || current.saveStatus !== "saved" || !saved || current.fingerprint !== saved || image !== saved || health !== saved || args.criteria.some(item => !item.passed)) throw new Error("完成条件を満たしていません。最新のSceneを保存し、整合性と実際の描画を確認したうえで修正してください");
           finished = true; completedFingerprint = current.fingerprint;
           completedText = [args.summary, ...args.criteria.map(item => `${item.criterion}：${item.reason}`)].join("\n");
           return result({ completed: true });
@@ -159,22 +159,22 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     let accepting = true;
     try {
       check();
-      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `制作ツールでエラーが起きました：${error.error.slice(0, 500)}` }) });
+      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `制作ツールでエラーが発生しました：${error.error.slice(0, 500)}` }) });
       detach = live?.attach(async message => {
         const fingerprint = JSON.stringify(message);
         if (accepted.has(message.id)) {
           if (accepted.get(message.id) !== fingerprint) throw new Error("同じ送信番号で異なる追加指示が届きました。入力を確認して送り直してください");
           return;
         }
-        if (!accepting || !session.isStreaming || signal?.aborted || plan) throw new Error("この依頼への応答は終了しました。追加の指示は、新しい依頼として送ってください");
+        if (!accepting || !session.isStreaming || signal?.aborted || plan) throw new Error("この依頼の応答は終了しました。追加の指示は新しい依頼として送ってください");
         if (!message.id || !message.prompt.trim() || message.prompt.length > 2000 || !["steer", "follow_up"].includes(message.delivery)) throw new Error("追加指示の内容を確認してください");
         // Prefix prevents a chat message from invoking extension slash commands.
-        const text = `追加の利用者の依頼：\n${message.prompt}\n\n添付した対象：${JSON.stringify({ attachedEntityIds: message.attachedEntityIds, attachedMaterialIds: message.attachedMaterialIds })}\n[message:${message.id}]`;
+        const text = `利用者からの追加指示：\n${message.prompt}\n\n添付した対象：${JSON.stringify({ attachedEntityIds: message.attachedEntityIds, attachedMaterialIds: message.attachedMaterialIds })}\n[message:${message.id}]`;
         queued.set(message.id, { message, text });
         try {
           const disposition = await (message.delivery === "steer" ? session.steer(text) : session.followUp(text));
           if (!accepting) throw new Error("応答が終了しました。入力を確認して新しい依頼として送ってください");
-          if (disposition !== "queued") throw new Error("追加指示を送信待ちにできませんでした。入力内容を確認して、もう一度送ってください");
+          if (disposition !== "queued") throw new Error("追加指示を送信待ちにできませんでした。入力内容を確認してもう一度送ってください");
           accepted.set(message.id, fingerprint);
           emit({ type: "input", message, state: queued.has(message.id) ? "queued" : "applied" });
         } catch (error) { queued.delete(message.id); throw error; }
@@ -185,7 +185,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
       if (lastAssistant?.role === "assistant" && lastAssistant.stopReason === "error") throw new Error(lastAssistant.errorMessage || "モデルから応答を受け取れませんでした。接続を確認して再試行してください");
       if (finished) {
         const current = await host("get_editor_context", {});
-        if (!inScope(current) || current.fingerprint !== completedFingerprint || current.saveStatus !== "saved") throw new Error("完成確認後にSceneが変わりました。最新の状態を確認してください");
+        if (!inScope(current) || current.fingerprint !== completedFingerprint || current.saveStatus !== "saved") throw new Error("完成確認のあとにSceneが変更されました。最新の状態を確認してください");
       }
       return { text: completedText || session.getLastAssistantText() || "応答が終わりました。Sceneを確認し、必要なら追加で依頼してください。", completionVerified: finished, usage: { ...observer.usage }, ...(plan ? { plan } : {}), ...(input.session ? { history: historySummary(manager, input.session.id) } : {}) };
     } catch (error) {

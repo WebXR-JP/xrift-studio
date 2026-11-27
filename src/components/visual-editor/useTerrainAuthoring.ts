@@ -298,7 +298,7 @@ export function useTerrainAuthoring({
         };
         bundleRef.current = committed.bundle;
         setSaveStatus("dirty");
-        notify("地形ブラシをシーンへ反映しました（Undo 1件）");
+        notify("地形ブラシの編集をシーンへ反映しました（「元に戻す」で取り消せます）");
         return commitEditorHistory(
           { ...current, present: transaction.before },
           committed,

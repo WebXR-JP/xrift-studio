@@ -14,12 +14,12 @@ export type AuthoringEvidenceResult = { complete: boolean; reasons: string[] };
 export function checkAuthoringEvidence(input: AuthoringEvidenceInput): AuthoringEvidenceResult {
   const reasons: string[] = [];
   if (!input.currentFingerprint || input.savedFingerprint !== input.currentFingerprint) reasons.push("最新のSceneが保存されていません");
-  if (input.pendingWrites) reasons.push("Sceneへの変更または保存を処理しています");
+  if (input.pendingWrites) reasons.push("Sceneの変更または保存を処理中です");
   const missing = [...new Set(input.requiredViews)].filter(view => !input.captures.some(capture => capture.view === view && capture.fingerprint === input.currentFingerprint));
-  if (missing.length) reasons.push(`最新のSceneを撮影していません: ${missing.join("、")}`);
-  if (!input.review || input.review.fingerprint !== input.currentFingerprint) reasons.push("最新のSceneに対する完成条件の確認がありません");
-  else if (!input.review.approved) reasons.push("完成条件に未完了の項目があります");
-  if (input.requiredCriteria?.length && !checkAuthoringCriteria(input.requiredCriteria, input.review?.criteria ?? []).complete) reasons.push("元の完成条件を一件ずつ確認できていません");
+  if (missing.length) reasons.push(`最新のSceneの撮影が済んでいません: ${missing.join("、")}`);
+  if (!input.review || input.review.fingerprint !== input.currentFingerprint) reasons.push("最新のSceneについて完成条件が確認されていません");
+  else if (!input.review.approved) reasons.push("完成条件に未達成の項目があります");
+  if (input.requiredCriteria?.length && !checkAuthoringCriteria(input.requiredCriteria, input.review?.criteria ?? []).complete) reasons.push("元の完成条件がすべて確認されていません");
   return { complete: reasons.length === 0, reasons };
 }
 import { checkAuthoringCriteria, type AuthoringCriterionVerdict } from "./authoring-criteria";

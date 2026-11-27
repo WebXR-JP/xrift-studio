@@ -37,22 +37,22 @@ export type PiAuthoringHost = {
 /** Pi owns planning and repair. This adapter owns UI scope and saved history. */
 export function createPiAuthoringRunner(host: PiAuthoringHost) {
   return async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: PiPlan, reasoningEffort?: string, requestedSessionId?: string, continuation?: PiContinuation, attachedEntityIds: readonly string[] = [], attachedMaterialIds: readonly string[] = []): Promise<Project | null> => {
-    if (host.chatgptGenerationRef.current || host.mcpPublishActiveRef.current || host.mcpModelingActiveRef.current) throw new Error("現在の処理が終わるか停止してから依頼してください");
+    if (host.chatgptGenerationRef.current || host.mcpPublishActiveRef.current || host.mcpModelingActiveRef.current) throw new Error("実行中の処理が終わるか停止してから、次の依頼を送ってください");
     if (!tauri.isAvailable() || !host.projectsRoot) throw new Error("デスクトップ版でワールドを開いてください");
     const source = host.requireMcpProjectBridge("制作チャット");
     const scope = source.currentContext();
-    if (!scope.canGenerate || source.currentBundle().project.projectKind !== "world") throw new Error("WorldをEditで開き、素材の読み込み完了を待ってください");
+    if (!scope.canGenerate || source.currentBundle().project.projectKind !== "world") throw new Error("ワールドを編集モードで開き、素材の読み込みが終わるまで待ってください");
     const previous = host.chatgptGenerationsRef.current.get(generationId);
     const continuing = Boolean(continuation || approved);
     const completedBeforeResume = continuing ? previous?.progress.completed ?? 0 : 0;
     const accumulateUsage = (usage: PiUsage): PiUsage => Object.fromEntries(Object.entries(usage).map(([key, value]) =>
       [key, value + (previous?.usage?.[key as keyof PiUsage] ?? 0)])) as PiUsage;
     const stored = host.chatgptPlansRef.current.get(generationId);
-    if (approved && (!stored || stored.snapshot !== chatgptPlanningSnapshot(source.currentBundle()))) throw new Error("プランの確認後にSceneが変わりました。現在のSceneからプランを作り直してください");
+    if (approved && (!stored || stored.snapshot !== chatgptPlanningSnapshot(source.currentBundle()))) throw new Error("プランを確認したあとにSceneが変更されました。現在のSceneからプランを作り直してください");
     const scoped = host.chatgptSessionsRef.current.filter(session => session.projectId === scope.projectId && session.sceneId === scope.sceneId);
     const sessionId = requestedSessionId ?? host.selectedChatgptSessionIdRef.current;
     let session = scoped.find(session => session.id === sessionId) ?? (requestedSessionId ? undefined : scoped[0]);
-    if (requestedSessionId && !session) throw new Error("対象のSceneのチャットを選んでください");
+    if (requestedSessionId && !session) throw new Error("このSceneのチャットを選んでください");
     if (!session) { session = createChatgptSession(scope.projectId, scope.sceneId); host.updateChatgptSessions([session, ...host.chatgptSessionsRef.current].slice(0, 20), true); }
     host.selectChatgptSession(session.id);
     let bridge = source, project = host.visualSessionRef.current?.project ?? null, created: Project | null = null;
@@ -76,7 +76,7 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
     };
     const current = () => {
       if (control.cancelled) throw new Error("制作を停止しました。保存済みの変更は残っています");
-      if (host.mcpProjectBridgeRef.current !== bridge || bridge.currentBundle().project.projectId !== job.projectId || bridge.currentBundle().scene.sceneId !== job.sceneId) throw new Error("開いている作品またはSceneが変わりました。保存済みの変更を保持して停止しました");
+      if (host.mcpProjectBridgeRef.current !== bridge || bridge.currentBundle().project.projectId !== job.projectId || bridge.currentBundle().scene.sceneId !== job.sceneId) throw new Error("開いている作品またはSceneが切り替わりました。保存済みの変更を残して制作を停止しました");
     };
     let watch: ReturnType<typeof setInterval> | undefined;
     const beforeOperations = new Map<string, PrototypeVisualProject>();
@@ -175,7 +175,7 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
       current();
       job = { ...job, liveMessages: job.liveMessages?.map(message => message.state === "queued" ? { ...message, state: "unapplied" } : message), ...(result.history ? { piHistory: result.history } : {}), ...(result.usage ? { usage: accumulateUsage(result.usage) } : {}) };
       if (result.plan) {
-        if (!result.plan.questions?.length && planningSnapshot !== chatgptPlanningSnapshot(bridge.currentBundle())) throw new Error("プラン作成中にSceneが変わりました。最新のSceneからプランを作り直してください");
+        if (!result.plan.questions?.length && planningSnapshot !== chatgptPlanningSnapshot(bridge.currentBundle())) throw new Error("プランの作成中にSceneが変更されました。最新のSceneからプランを作り直してください");
         const plan: PiPlan = result.plan;
         host.chatgptPlansRef.current.set(generationId, { plan, snapshot: chatgptPlanningSnapshot(bridge.currentBundle()), target: created ? "current" : target });
         report({ status: "planned", plan, nextActions: [plan.questions?.length ? "answer_chatgpt_questions" : "apply_chatgpt_plan", "cancel_chatgpt_generation"],
@@ -183,7 +183,7 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
         return null;
       }
       host.chatgptPlansRef.current.delete(generationId);
-      report({ status: "completed", completionVerified: result.completionVerified === true, path: project?.path, name: project?.name, progress: { ...job.progress, phase: "completed", message: result.text || "応答が終わりました。Sceneを確認できます。" } });
+      report({ status: "completed", completionVerified: result.completionVerified === true, path: project?.path, name: project?.name, progress: { ...job.progress, phase: "completed", message: result.text || "応答が終わりました。Sceneを確認してください。" } });
       return project;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

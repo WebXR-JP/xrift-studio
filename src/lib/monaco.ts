@@ -160,7 +160,7 @@ export async function transpileTypeScriptModule(
       message:
         error instanceof Error
           ? error.message
-          : "TypeScript compilerを読み込めませんでした",
+          : "TypeScriptコンパイラを読み込めませんでした",
     };
   }
 }

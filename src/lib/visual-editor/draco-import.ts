@@ -50,7 +50,7 @@ export async function convertDracoGeometryToGlb(
       onlyVisible: false,
     });
     if (!(exported instanceof ArrayBuffer)) {
-      throw new Error("Draco変換結果がbinary GLBではありません。 ");
+      throw new Error("Draco変換結果がバイナリGLBではありません。");
     }
     return new Uint8Array(exported);
   } finally {

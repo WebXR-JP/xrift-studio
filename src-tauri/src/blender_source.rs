@@ -43,7 +43,7 @@ pub(crate) async fn convert_blender_source(project_path: String, data_url: Strin
             .stderr(Stdio::from(File::create(directory.join("blender.stderr.log")).map_err(|e| e.to_string())?));
         let mut child = command.spawn().map_err(|_| "Blenderを起動できませんでした")?;
         if !wait_model_process(&mut child, None).await?.success() {
-            return Err("Blenderから書き出せませんでした。外部参照をローカル化し、テクスチャを.blendにパックして保存してください。元の素材は保持されています".into());
+            return Err("Blenderから書き出せませんでした。外部参照をローカル化し、テクスチャを.blendにパックして保存してください。元の素材はそのまま残っています".into());
         }
         let byte_length = glb_metadata(&glb, &directory)?;
         Ok(BlenderModelResult { path: blender_path(&glb).to_string_lossy().into(), file_name: "model.glb".into(), byte_length,
@@ -57,9 +57,9 @@ pub(crate) async fn convert_blender_source(project_path: String, data_url: Strin
 pub(crate) async fn open_blender_source(project_path: String, relative_path: String) -> Result<(), String> {
     let root = project_root(&project_path)?;
     let relative = crate::validate_asset_import_path(&relative_path)?;
-    if relative.extension().and_then(|s| s.to_str()) != Some("blend") { return Err("Blenderの編集元を選択してください".into()); }
+    if relative.extension().and_then(|s| s.to_str()) != Some("blend") { return Err("編集元のBlenderファイル（.blend）を選択してください".into()); }
     ensure_no_link_ancestors(&root, &relative)?;
-    let path = root.join(relative).canonicalize().map_err(|_| "Blenderの編集元が見つかりません")?;
+    let path = root.join(relative).canonicalize().map_err(|_| "編集元のBlenderファイルが見つかりません")?;
     if !path.starts_with(&root) || !path.is_file() { return Err("プロジェクト内のBlenderファイルを選択してください".into()); }
     let (executable, _) = find_blender().await.ok_or("Blenderが見つかりません")?;
     // Explicit user action: open the graphical editor, not a background job.

@@ -149,7 +149,7 @@ export function SupportReportModal({
 ## 環境情報
 - XRift Studio: ${valueOrUnknown(environment.appVersion)}
 - OS: ${valueOrUnknown(environment.os)} ${valueOrUnknown(environment.osVersion)}
-- CPU architecture: ${valueOrUnknown(environment.arch)}
+- CPUアーキテクチャ: ${valueOrUnknown(environment.arch)}
 - Node.js: ${valueOrUnknown(environment.nodeVersion)}
 - @xrift/cli: ${valueOrUnknown(environment.cliVersion)}
 - プロジェクト数: ${projectCount}
@@ -285,8 +285,8 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
           <section className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
             <h3 className="text-sm font-semibold text-zinc-800">まずは症状から確認する</h3>
-            <GuideExternalLink page="troubleshooting" label="困ったときのガイド（ブラウザー）" />
-            <p className="text-xs leading-5 text-zinc-600">ログインせずに読めます。環境情報のコピーも不要です。</p>
+            <GuideExternalLink page="troubleshooting" label="困ったときのガイド（ブラウザ）" />
+            <p className="text-xs leading-5 text-zinc-600">ログインや環境情報のコピーなしで、すぐに確認できます。</p>
           </section>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             相談先

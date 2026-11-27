@@ -647,7 +647,7 @@ function SkyShaderField({
         <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           {candidates.length === 0
             ? "「アセットストア → Skybox Shader」で追加できます。"
-            : "Shaderを使わない場合は、Skybox Textureまたはグラデーションを表示します。"}
+            : "Skybox Shaderを使わない場合は、Skybox Textureまたはグラデーションを表示します。"}
         </p>
       )}
     </div>
@@ -979,7 +979,7 @@ export function SceneSettingsInspector({
           <NumberField label="Intensity（強さ）" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
-        <Section title="Shadow Map" reading="影の種類" description="Scene内のライトすべてに適用します。初期値はソフトなPCFShadowMapです。">
+        <Section title="Shadow Map" reading="影の種類" description="シーン内のすべてのライトに適用します。初期値はソフトなPCFShadowMapです。">
           <label className="grid grid-cols-[minmax(0,1fr)_160px] items-center gap-3 text-xs text-slate-700">
             Type（影の描き方）
             <select value={settings.shadowMapType} disabled={readOnly} onChange={(event) => update({ ...settings, shadowMapType: event.currentTarget.value as SceneSettings["shadowMapType"] })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
@@ -1335,7 +1335,7 @@ export function SceneSettingsInspector({
           <NumberField label="分割数" value={settings.editor.gizmo.gridDivisions} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridDivisions) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridDivisions: Math.round(gridDivisions) } } })} />
           <NumberField label="ギズモの大きさ" value={settings.editor.gizmo.size} min={0.1} step={0.01} disabled={readOnly} onChange={(size) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, size } } })} />
           <Toggle label="スナップを有効にする" description="移動・回転・拡縮を一定間隔に揃えます。" checked={settings.editor.gizmo.snapEnabled} disabled={readOnly} onChange={(snapEnabled) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapEnabled } } })} />
-          <Toggle label="Shiftを押している間は反転する" description="スナップがスナップがオフなら一時的にオンになり、オンなら一時的に自由に動かせます。" checked={settings.editor.gizmo.snapHoldShift} disabled={readOnly} onChange={(snapHoldShift) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapHoldShift } } })} />
+          <Toggle label="Shiftを押している間は反転する" description="スナップがオフなら一時的にオンになり、オンなら一時的に自由に動かせます。" checked={settings.editor.gizmo.snapHoldShift} disabled={readOnly} onChange={(snapHoldShift) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapHoldShift } } })} />
           <NumberField label="移動スナップ" value={settings.editor.gizmo.translateSnap} min={0.001} step={0.1} disabled={readOnly} onChange={(translateSnap) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, translateSnap } } })} />
           <NumberField label="回転スナップ (度)" value={settings.editor.gizmo.rotateSnapDegrees} min={0.1} step={1} disabled={readOnly} onChange={(rotateSnapDegrees) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, rotateSnapDegrees } } })} />
           <NumberField label="拡縮スナップ" value={settings.editor.gizmo.scaleSnap} min={0.001} step={0.05} disabled={readOnly} onChange={(scaleSnap) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, scaleSnap } } })} />

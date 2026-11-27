@@ -1898,7 +1898,7 @@ function formatOpenBrushFallbackReason(
   if (reason === "unsupported-preset") return "未対応プリセット";
   return reason === "attribute-mismatch"
     ? "メッシュの頂点属性不足"
-    : "Shaderの読み込み失敗";
+    : "シェーダーの読み込み失敗";
 }
 
 function shaderLineCount(source: string | undefined): number {
@@ -2575,7 +2575,7 @@ function StandardMaterialQuickEditor({
       {openBrush ? (
         <EditorSection title="Open Brushの描画">
           <p className="text-xs leading-4 text-slate-600">
-            ブラシの見た目を保ったまま、色やテクスチャを調整します。
+            ブラシの見た目はそのままに、色やテクスチャを調整します。
           </p>
           <details className="rounded border border-slate-200 bg-slate-50">
             <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-semibold text-slate-700">
@@ -2737,7 +2737,7 @@ function StandardMaterialQuickEditor({
         ) : null}
         <TextureSlot materialPath="opacityTexture"
           label="Opacity Map"
-          description="選んだチャンネルをAlphaに掛けます。黒い部分は透明になり、白い部分は元のAlphaを保ちます。Opaqueに追加するとBlendへ切り替わります。"
+          description="選んだチャンネルをAlphaに掛けます。黒い部分は透明になり、白い部分は元のAlphaのまま残ります。Opaqueに追加するとBlendへ切り替わります。"
           value={asset.properties.opacityTexture}
           textures={textures}
           projectPath={projectPath}
@@ -3383,7 +3383,7 @@ function StandardMaterialQuickEditor({
               <span>
                 Attenuationを有効にする
                 <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
-                  光が通る距離に応じて色と明るさを変えます。無効にすると、光の色と明るさを保ちます。
+                  光が通る距離に応じて色と明るさを変えます。無効にすると、光の色と明るさは変わりません。
                 </span>
               </span>
               <MaterialInput materialPath="extensions.KHR_materials_volume.attenuationDistance" materialEncode={(enabled) => enabled ? 1 : null}
@@ -3952,7 +3952,7 @@ const TEXTURE_QUALITY_LEVELS = [
   {
     quality: 95,
     label: "最高",
-    hint: "元の見た目をほぼ保つ。容量は大きめ",
+    hint: "元の見た目にほぼ近い画質。容量は大きめ",
   },
   {
     quality: 85,
@@ -4404,7 +4404,7 @@ export function AssetQuickEditor({
       <EditorSection title="ライトマップ">
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs leading-4 text-slate-600">
-            ライトベイクで焼いた陰影です。Scene Viewと公開したワールドが、この画像とUV2データをそのまま使います。
+            ライトベイクで焼き込んだ陰影です。Scene Viewでも公開後のワールドでも、この画像とUV2データをそのまま使います。
           </p>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-slate-700">
             <dt className="text-slate-500">画像</dt>
@@ -4412,7 +4412,7 @@ export function AssetQuickEditor({
             <dt className="text-slate-500">細かさ</dt>
             <dd>1mあたり {lightmap.stats.texelsPerMeter.toFixed(1)}px</dd>
             <dt className="text-slate-500">対象</dt>
-            <dd>Mesh {lightmap.stats.meshCount}件・Entity {lightmap.entityIds.length}件</dd>
+            <dd>メッシュ {lightmap.stats.meshCount}件・Entity {lightmap.entityIds.length}件</dd>
             <dt className="text-slate-500">焼いたライト</dt>
             <dd>{lightmap.bakedLightComponentIds.length}灯（直接光と影まで）</dd>
             <dt className="text-slate-500">サイズ</dt>

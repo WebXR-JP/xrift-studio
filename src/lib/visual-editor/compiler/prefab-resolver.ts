@@ -195,7 +195,7 @@ function instantiatePrefab(
         hostEntityId,
         instance,
         "prefab-asset-invalid",
-        "参照先素材はproject-relativeなプレハブdocumentを指していません",
+        "参照先素材はプロジェクト内のプレハブファイルを指していません",
       ),
     );
     return;
@@ -208,7 +208,7 @@ function instantiatePrefab(
         hostEntityId,
         instance,
         "prefab-document-missing",
-        `プレハブdocumentが見つかりません: ${reference.prefabPath}`,
+        `プレハブファイルが見つかりません: ${reference.prefabPath}`,
       ),
       prefabId: reference.prefabId,
       fieldPath: "prefabPath",
@@ -222,7 +222,7 @@ function instantiatePrefab(
         hostEntityId,
         instance,
         "prefab-document-id-mismatch",
-        `プレハブdocument IDが素材pathと一致しません: ${reference.prefabId}`,
+        `プレハブのIDが素材パスと一致しません: ${reference.prefabId}`,
       ),
       prefabId: prefab.prefabId,
       fieldPath: "prefabId",
@@ -380,7 +380,7 @@ function collectPrefabSubtree(
           owner.hostEntityId,
           owner.instance,
           "prefab-hierarchy-cycle",
-          `プレハブhierarchyが循環しています: ${entityId}`,
+          `プレハブの親子関係が循環しています: ${entityId}`,
         ),
         prefabId: prefab.prefabId,
         fieldPath: `entities.${entityId}`,
@@ -395,7 +395,7 @@ function collectPrefabSubtree(
           owner.hostEntityId,
           owner.instance,
           "prefab-entity-multiple-parents",
-          `プレハブEntityが複数箇所から参照されています: ${entityId}`,
+          `プレハブ内のEntityが複数箇所から参照されています: ${entityId}`,
         ),
         prefabId: prefab.prefabId,
         fieldPath: `entities.${entityId}`,
@@ -411,7 +411,7 @@ function collectPrefabSubtree(
           owner.hostEntityId,
           owner.instance,
           "prefab-child-entity-missing",
-          `プレハブchild Entityが見つかりません: ${entityId}`,
+          `プレハブ内の子Entityが見つかりません: ${entityId}`,
         ),
         prefabId: prefab.prefabId,
         fieldPath: `entities.${entityId}`,
@@ -532,8 +532,8 @@ function clonePrefabComponent(
             ? "prefab-entity-reference-outside-subtree"
             : "prefab-entity-reference-missing",
           prefab.entities[entityReference]
-            ? `スクリプトEntity参照が配置対象subtreeの外にあります: ${entityReference}`
-            : `スクリプトEntity参照がプレハブ内にありません: ${entityReference}`,
+            ? `スクリプトのEntity参照が配置対象の階層外にあります: ${entityReference}`
+            : `スクリプトのEntity参照がプレハブ内にありません: ${entityReference}`,
         ),
         prefabId: prefab.prefabId,
         componentId: generatedId,
@@ -566,8 +566,8 @@ function clonePrefabComponent(
             ? "prefab-entity-reference-outside-subtree"
             : "prefab-entity-reference-missing",
           prefab.entities[entityReference]
-            ? `XRift Entity参照が配置対象subtreeの外にあります: ${entityReference}`
-            : `XRift Entity参照がプレハブ内にありません: ${entityReference}`,
+            ? `XRiftのEntity参照が配置対象の階層外にあります: ${entityReference}`
+            : `XRiftのEntity参照がプレハブ内にありません: ${entityReference}`,
         ),
         prefabId: prefab.prefabId,
         componentId: generatedId,

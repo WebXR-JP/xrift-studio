@@ -199,7 +199,7 @@ impl PreviewStream {
         if !self.warned && bounded_file(&directory.join("preview-error.txt"), 1024).is_some() {
             self.warned = true;
             (self.callback)(
-                json!({"type":"progress", "message":"Blenderの途中画像を作成できませんでした。モデルの制作は続けています"}),
+                json!({"type":"progress", "message":"Blenderのプレビュー画像を作成できませんでした。モデルの制作は続けています"}),
             );
         }
         let Some(frame) = bounded_file(&directory.join("preview.json"), 1024)

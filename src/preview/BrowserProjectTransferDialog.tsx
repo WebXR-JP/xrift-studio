@@ -97,7 +97,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         </p>
       ) : null}
       {state?.phase === "new" ? <div className="mt-4 space-y-3 text-sm text-zinc-600">
-        <p>作るものを選びます。</p>
+        <p>作るものを選んでください。</p>
         <div className="space-y-2">
           {([
             { kind: "world", label: "ワールドを作る", description: "人が集まる空間" },
@@ -110,7 +110,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         </div>
       </div> : null}
       {state?.phase === "select" ? <div className="mt-4 space-y-4 text-sm text-zinc-600">
-        <p>新しく作るか、保存したプロジェクトを開きます。</p>
+        <p>新しく作るか、保存済みのプロジェクトを選んで開いてください。</p>
         <section aria-labelledby="new-project-heading" className="space-y-2">
           <h3 id="new-project-heading" className="text-sm font-semibold text-zinc-800">新しく作る</h3>
           <div className="space-y-2">
@@ -131,7 +131,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
               <span className="min-w-0"><span className="block truncate font-medium text-zinc-800">{project.title || project.name}</span><span className="mt-1 block text-xs text-zinc-500">{Number.isFinite(Date.parse(project.modifiedAt)) ? new Date(project.modifiedAt).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</span></span>
               <span className="shrink-0 text-xs text-zinc-500">{project.path === activeProjectPath ? "編集中" : project.kind === "world" ? "ワールド" : "アイテム"}</span>
             </button>)}
-          </div> : <p className="rounded-lg border border-zinc-200 p-3 text-xs">このブラウザには、保存済みのプロジェクトがありません。</p>}
+          </div> : <p className="rounded-lg border border-zinc-200 p-3 text-xs">このブラウザに保存されたプロジェクトはまだありません。</p>}
         </section>
         <section aria-labelledby="file-project-heading" className="space-y-2">
           <h3 id="file-project-heading" className="text-sm font-semibold text-zinc-800">ファイルから開く</h3>
@@ -149,9 +149,9 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           <details className="rounded-lg border border-zinc-200 px-3">
           <summary className="flex min-h-11 cursor-pointer items-center font-medium text-zinc-700">パソコンへ引き継ぐには</summary>
           <ol className="list-decimal space-y-2 pb-3 pl-5">
-            <li>「ダウンロード」を押してください。保存先はSafariのダウンロード一覧で確認できます。</li>
-            <li>iCloud Driveなどでパソコンにファイルを移してください。</li>
-            <li>デスクトップ版のプロジェクト一覧で「ファイルから取り込む」を選んでください。スクリプトを含む作品も、デスクトップ版から公開できます。</li>
+            <li>「ダウンロード」を押して保存します。iPadのSafariでは、ダウンロード一覧から保存先を確認できます。</li>
+            <li>iCloud Driveや共有機能などで、保存したファイルをパソコンへ移します。</li>
+            <li>パソコンのデスクトップ版を開き、プロジェクト一覧の「ファイルから取り込む」から読み込みます。スクリプトを含む作品も、デスクトップ版から公開できます。</li>
           </ol>
           </details>
           {downloadStarted ? <p role="status">ダウンロードを開始しました。</p> : null}

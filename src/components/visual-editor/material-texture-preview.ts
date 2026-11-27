@@ -228,7 +228,7 @@ export function createMaterialPreviewTextureSession(
     onChange({ textures, statuses });
     const states = [...entries.values()].map(entry => entry.status);
     onReadiness?.(states.includes("error")
-      ? { status: "error", message: "Materialの画像を読み込めず、見た目を確認できませんでした" }
+      ? { status: "error", message: "マテリアルの画像を読み込めず、見た目を確認できませんでした" }
       : { status: states.includes("loading") ? "loading" : "ready" }, requestKey);
   };
   return {

@@ -374,9 +374,9 @@ pub async fn register_xrift_mcp_client(
                     MCP_SERVER_NAME.into(),
                 ],
             )
-            .map_err(|error| format!("Claude Codeの旧登録を更新できません: {error}"))?;
+            .map_err(|error| format!("Claude Codeの以前の登録を更新できません: {error}"))?;
             if !remove_status.success() {
-                return Err("Claude Codeの旧登録を更新できませんでした".to_string());
+                return Err("Claude Codeの以前の登録を更新できませんでした".to_string());
             }
         }
         let arguments = registration_arguments(client, &sidecar_path, &rendezvous_path)
@@ -478,7 +478,7 @@ async fn handle_broker_connection(
             &mut writer,
             envelope.request.id,
             "TOOL_NOT_FOUND",
-            "対応していないAI editor toolです",
+            "対応していないAI編集ツールです",
         )
         .await;
     }
@@ -492,7 +492,7 @@ async fn handle_broker_connection(
             &mut writer,
             envelope.request.id,
             "EDITOR_UNAVAILABLE",
-            "XRift Studioのウィンドウが応答していません。Studioを起動してから再試行してください",
+            "XRift Studioのウィンドウが応答していません。XRift Studioを起動してから再試行してください",
         )
         .await;
     }
@@ -1232,7 +1232,7 @@ fn write_config_backup(
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(error) => Err(error.to_string()),
     }
-    .map_err(|_| format!("{client_label}設定のバックアップを作成できませんでした"))
+    .map_err(|_| format!("{client_label}の設定のバックアップを作成できませんでした"))
 }
 
 fn install_registration_sidecar(source: &Path, directory: &Path) -> Result<PathBuf, String> {
@@ -5774,12 +5774,12 @@ pub(crate) async fn call_pi_tool(app: &AppHandle, generation_id: &str, tool: &st
     let (sender, receiver) = oneshot::channel();
     state.pending.lock().await.insert(id.clone(), sender);
     let event = XriftMcpEditorRequestEvent { id: id.clone(), client_name: "Pi".into(), tool: tool.into(), arguments, internal_generation_id: Some(generation_id.into()), internal_scope: Some(scope) };
-    let emitted = app.get_webview_window("main").ok_or_else(|| "Editorのウィンドウがありません".to_string())
-        .and_then(|window| window.emit(MCP_EVENT_NAME, event).map_err(|_| "Editorへ操作を送れませんでした".to_string()));
+    let emitted = app.get_webview_window("main").ok_or_else(|| "エディターのウィンドウが見つかりません".to_string())
+        .and_then(|window| window.emit(MCP_EVENT_NAME, event).map_err(|_| "エディターへ操作を送れませんでした".to_string()));
     if let Err(error) = emitted { state.pending.lock().await.remove(&id); return Err(error); }
     // Do not abandon an admitted write on cancellation: drain its response first.
     let response = tokio::time::timeout(Duration::from_secs(request_timeout_seconds(tool)), receiver).await;
     state.pending.lock().await.remove(&id);
-    response.map_err(|_| "Editorの処理完了を確認できませんでした。Sceneの保存状態を確認してください".to_string())?
-        .map_err(|_| "Editorとの接続が終了しました".to_string())
+    response.map_err(|_| "エディターの処理完了を確認できませんでした。シーンの保存状態を確認してください".to_string())?
+        .map_err(|_| "エディターとの接続が終了しました".to_string())
 }

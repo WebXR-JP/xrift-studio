@@ -119,7 +119,7 @@ function compileRuntimeEntity(
         diagnostics.push({
           severity: "blocking",
           code: "runtime-mesh-geometry-missing",
-          message: "Runtime JSONへ変換できるメッシュgeometryがありません",
+          message: "Runtime JSONへ変換できるメッシュ形状がありません",
           sceneId,
           entityId: entity.id,
           componentId: component.id,
@@ -337,8 +337,8 @@ function appendRuntimeAdapterDiagnostic(
         : "runtime-component-metadata-only",
     message:
       support === "missing"
-        ? `xrift-studio-runtimeは${componentType}の実行adapterにまだ対応していません`
-        : `xrift-studio-runtimeは${componentType}をmetadataとして保持しますが、実行動作にはまだ接続しません`,
+        ? `xrift-studio-runtimeは${componentType}の実行機能にまだ対応していません`
+        : `xrift-studio-runtimeは${componentType}の設定データを残しますが、実行時の動作にはまだ対応していません`,
     sceneId,
     entityId,
     componentId,

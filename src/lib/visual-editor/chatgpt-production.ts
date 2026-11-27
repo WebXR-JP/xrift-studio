@@ -20,7 +20,7 @@ export function parseChatgptProduction(value: unknown): ChatgptProduction | unde
     || new Set(value.criteria).size !== value.criteria.length
     || !value.criteria.every(criterion => text(criterion, 240) && Boolean(criterion.trim()))
     || !Number.isInteger(value.maxPasses) || (value.maxPasses as number) < 1 || (value.maxPasses as number) > 6) {
-    throw new Error("制作の範囲・細かさ・完了条件・回数の上限を確認できませんでした");
+    throw new Error("制作の範囲・細かさ・完了条件・回数上限の形式が正しくありません");
   }
   return { scope: value.scope as ChatgptProduction["scope"], detail: value.detail as ChatgptProduction["detail"],
     focus: value.focus, criteria: [...value.criteria] as string[], maxPasses: value.maxPasses as number };
