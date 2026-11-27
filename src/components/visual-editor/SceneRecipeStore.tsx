@@ -1,5 +1,6 @@
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getMaterialShowcaseAsset } from "../../lib/visual-editor/material-showcase-catalog";
+import { getFoliageMaterialAsset } from "../../lib/visual-editor/foliage-shader-catalog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -24,6 +25,23 @@ function usesTextures(recipe: SceneRecipe): boolean {
     if ((part.kind !== "primitive" && part.kind !== "model") || !part.materialAssetId) return false;
     return catalogMaterialTextures(getMaterialShowcaseAsset(part.materialAssetId)?.properties).length > 0;
   });
+}
+/**
+ * The Custom Shader Material a set brings along, with the number of pictures it
+ * reads. A tree arrives with more than its model: the author should see that
+ * before placing it.
+ */
+function shaderMaterialOf(recipe: SceneRecipe): { name: string; textures: number } | null {
+  for (const part of recipe.parts) {
+    if ((part.kind !== "primitive" && part.kind !== "model") || !part.materialAssetId) continue;
+    const material = getFoliageMaterialAsset(part.materialAssetId);
+    if (!material) continue;
+    return {
+      name: material.name,
+      textures: catalogMaterialTextures({ shader: material.shader }).length,
+    };
+  }
+  return null;
 }
 
 export type SceneRecipeInstallResult = {
@@ -115,6 +133,10 @@ export function SceneRecipeStore({
     }
     return { ...counts, graph: selected.behaviours?.length ?? 0 };
   }, [selected]);
+  const selectedShaderMaterial = useMemo(
+    () => (selected ? shaderMaterialOf(selected) : null),
+    [selected],
+  );
 
   // The result lands under a full-height detail pane, so on a long lesson it
   // renders below the fold: the author presses 追加 and nothing they can see
@@ -319,6 +341,11 @@ export function SceneRecipeStore({
                   </li>
                 ) : null}
                 {usesTextures(selected) ? <li>使用するPBRテクスチャもAssetsに追加します</li> : null}
+                {selectedShaderMaterial ? (
+                  <li>
+                    マテリアル「{selectedShaderMaterial.name}」と画像 {selectedShaderMaterial.textures} 枚もAssetsに追加します
+                  </li>
+                ) : null}
               </ul>
             </div>
 

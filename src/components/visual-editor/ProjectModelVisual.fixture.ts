@@ -13,6 +13,7 @@ import {
   RawShaderMaterial,
   SRGBColorSpace,
   Texture,
+  Vector2,
   Vector3,
   type InstancedMesh,
   type Material,
@@ -30,7 +31,12 @@ import {
   normalizeTextureImportSettings,
   normalizeMaterialProperties,
   repairImportedObject3DHierarchy,
+  resolveSceneLighting,
+  resolveSceneSettings,
+  resolveSceneWind,
   updateMaterialAsset,
+  LIGHTING_CONTRACT_GLSL_UNIFORMS,
+  WIND_CONTRACT_GLSL_UNIFORMS,
   type ClassicR3fMaterialShader,
   type AssetManifest,
   type MaterialAsset,
@@ -51,7 +57,12 @@ import {
   loadProjectModelData,
   selectSourceModelNode,
   cloneSourceModelNode,
+  type ProjectModelClassicShaderMaterial,
 } from "./ProjectModelVisual";
+import {
+  applyLightingDrivenUniforms,
+  applyWindDrivenUniforms,
+} from "./scene-driven-uniforms";
 import { tauri } from "../../lib/tauri";
 import { createVrmAvatarFixtureBytes } from "../../lib/visual-editor/compiler/vrm-avatar.fixture";
 import { bindVrmSpringBones } from "../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
@@ -93,6 +104,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertObject3DHierarchyRepairKeepsValidOwner();
   assertCustomShaderRuntimeCanBeInspected();
   assertClassicR3fMaterialReceivesSceneFog();
+  assertModelCustomShadersReceiveSceneWindAndLight();
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
   await assertMaterialTextureEditsKeepReadySlots();
   await assertVrmSpringBoneModelStaysMeasurable();
@@ -445,6 +457,167 @@ function assertClassicR3fMaterialReceivesSceneFog(): void {
     "The authored uniforms were lost while merging the fog uniforms",
   );
   material.dispose();
+}
+
+/**
+ * A Model that wears a Custom Shader (foliage, for one) reads the Scene's wind
+ * and key light, as a primitive does. The Model reports each such Material it
+ * built, so the Scene View can write the Scene's values into every one of
+ * them: one per mesh, each on the variant its mesh name picks.
+ */
+function assertModelCustomShadersReceiveSceneWindAndLight(): void {
+  const project = createPrototypeProject("world", "model-scene-driven");
+  const base = getMaterialAsset(project.assets, BUILTIN_ASSET_IDS.material.violet);
+  assert(base, "The scene-driven Material fixture is missing");
+  const shader: ClassicR3fMaterialShader = {
+    kind: "classic-r3f",
+    sourceModulePath: "fixture://foliage",
+    vertexShader: `${WIND_CONTRACT_GLSL_UNIFORMS}\nvoid main() {\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}`,
+    fragmentShader: `${LIGHTING_CONTRACT_GLSL_UNIFORMS}\nuniform float uGain;\nvoid main() {\n  gl_FragColor = vec4(uSunColor * uSunIntensity * uGain, 1.0);\n}`,
+    uniforms: {
+      // What an author left in the Material. None of it is the Scene's value.
+      uWindDirection: { kind: "vector", value: [0, -1] },
+      uWindSpeed: { kind: "number", value: 9 },
+      uWindTurbulence: { kind: "number", value: 0.9 },
+      uSunDirection: { kind: "vector", value: [1, 0, 0] },
+      uSunColor: { kind: "color", value: "#102030" },
+      uSunIntensity: { kind: "number", value: 9 },
+      uAmbientColor: { kind: "vector", value: [0.3, 0.2, 0.1] },
+      uAmbientIntensity: { kind: "number", value: 9 },
+      uGain: { kind: "number", value: 0.5 },
+    },
+    variants: [
+      { name: "leaves", meshNameIncludes: "leaves", defines: { LEAVES: "1" }, side: "double", transparent: false, depthWrite: true },
+      { name: "default", defines: {}, side: "front", transparent: false, depthWrite: true },
+    ],
+  };
+  const foliage: MaterialAsset = { ...base, id: "fixture-foliage", name: "Foliage", shader };
+  // A shader the validator refuses is drawn with the PBR fallback instead.
+  const broken: MaterialAsset = {
+    ...base,
+    id: "fixture-broken",
+    name: "Broken",
+    shader: { ...shader, fragmentShader: "uniform float uGain;" },
+  };
+  const source = (index: number) => {
+    const material = new MeshPhysicalMaterial();
+    material.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = index;
+    return material;
+  };
+  const sources = [source(0), source(1), source(2)];
+  const trunk = new Mesh<BoxGeometry, Material>(new BoxGeometry(1, 1, 1), sources[0]!);
+  trunk.name = "Trunk";
+  const leaves = new Mesh<BoxGeometry, Material>(new BoxGeometry(1, 1, 1), sources[0]!);
+  leaves.name = "Leaves_01";
+  const plain = new Mesh<BoxGeometry, Material>(new BoxGeometry(1, 1, 1), sources[1]!);
+  plain.name = "Pot";
+  const refused = new Mesh<BoxGeometry, Material>(new BoxGeometry(1, 1, 1), sources[2]!);
+  refused.name = "Leaves_02";
+  const root = new Group();
+  root.add(trunk, leaves, plain, refused);
+
+  const reported: ProjectModelClassicShaderMaterial[] = [];
+  const owned = applyAssignedMaterialPreviews(
+    root,
+    [
+      { sourceMaterialIndex: 0, material: foliage },
+      { sourceMaterialIndex: 1, material: { ...base, shader: undefined } },
+      { sourceMaterialIndex: 2, material: broken },
+    ],
+    undefined,
+    [],
+    reported,
+  );
+  assert(
+    reported.length === 2 &&
+      reported[0]!.material === trunk.material &&
+      reported[1]!.material === leaves.material &&
+      reported.every((entry) => entry.shader === shader),
+    `every Custom Shader Material a Model wears must be reported with its shader, and nothing else: ${reported.length}`,
+  );
+  assert(
+    reported[0]!.material.defines.LEAVES === undefined &&
+      reported[1]!.material.defines.LEAVES === "1",
+    "each mesh must wear the variant its own name picks",
+  );
+  assert(
+    !(plain.material as ShaderMaterial).isShaderMaterial &&
+      !(refused.material as ShaderMaterial).isShaderMaterial,
+    "a PBR Material and the fallback of a refused shader are not Custom Shader Materials",
+  );
+
+  const settings = resolveSceneSettings(project.scene.settings);
+  const wind = resolveSceneWind({
+    ...settings.vegetation,
+    enabled: true,
+    windSpeed: 1.75,
+    gustStrength: 0.25,
+    windDirectionDegrees: 120,
+  });
+  const lighting = resolveSceneLighting(project.scene, {
+    enabled: true,
+    color: "#336699",
+    intensity: 0.75,
+  });
+  const read = (material: ShaderMaterial) =>
+    JSON.stringify({
+      windDirection: (material.uniforms.uWindDirection!.value as Vector2).toArray(),
+      windSpeed: material.uniforms.uWindSpeed!.value,
+      windTurbulence: material.uniforms.uWindTurbulence!.value,
+      sunDirection: (material.uniforms.uSunDirection!.value as Vector3).toArray(),
+      sunColor: (material.uniforms.uSunColor!.value as Vector3).toArray(),
+      sunIntensity: material.uniforms.uSunIntensity!.value,
+      ambientColor: (material.uniforms.uAmbientColor!.value as Vector3).toArray(),
+      ambientIntensity: material.uniforms.uAmbientIntensity!.value,
+      gain: material.uniforms.uGain!.value,
+    });
+  const expected = (current: typeof wind) =>
+    JSON.stringify({
+      windDirection: current.direction,
+      windSpeed: current.speed,
+      windTurbulence: current.turbulence,
+      sunDirection: lighting.sunDirection,
+      sunColor: lighting.sunColor,
+      sunIntensity: lighting.sunIntensity,
+      ambientColor: lighting.ambientColor,
+      ambientIntensity: lighting.ambientIntensity,
+      gain: 0.5,
+    });
+  assert(
+    lighting.sunIntensity > 0 && lighting.ambientIntensity === 0.75 && wind.speed === 1.75,
+    "the fixture Scene must have a key light, an ambient and a wind",
+  );
+  for (const { material } of reported) {
+    assert(
+      read(material) !== expected(wind),
+      "the fixture's saved values must differ from the Scene's, or the check proves nothing",
+    );
+  }
+  const direction = reported[1]!.material.uniforms.uWindDirection!.value as Vector2;
+  for (const entry of reported) {
+    applyWindDrivenUniforms(entry.material, entry.shader, wind);
+    applyLightingDrivenUniforms(entry.material, entry.shader, lighting);
+  }
+  for (const { material } of reported) {
+    assert(
+      read(material) === expected(wind),
+      `a Model's Custom Shader Material must hold the Scene's wind and key light on every variant: ${read(material)}`,
+    );
+  }
+  // The Scene's wind changes: the same Materials follow, values written in place.
+  const gust = { ...wind, direction: [1, 0] as [number, number], speed: 4, turbulence: 1 };
+  for (const entry of reported) {
+    applyWindDrivenUniforms(entry.material, entry.shader, gust);
+  }
+  assert(
+    reported.every(({ material }) => read(material) === expected(gust)) &&
+      reported[1]!.material.uniforms.uWindDirection!.value === direction,
+    "a change of the Scene's wind must reach the same Materials, without replacing their uniforms",
+  );
+
+  owned.forEach((material) => material.dispose());
+  for (const mesh of [trunk, leaves, plain, refused]) mesh.geometry.dispose();
+  sources.forEach((material) => material.dispose());
 }
 
 function assertCustomShaderRuntimeCanBeInspected(): void {

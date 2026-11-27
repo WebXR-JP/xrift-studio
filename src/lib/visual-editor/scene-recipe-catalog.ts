@@ -7,6 +7,8 @@ import {
   ensureBuiltinModelAsset,
 } from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { catalogMaterialTextureSource } from "./catalog-material-dependencies";
+import { FOLIAGE_BROADLEAF_MATERIAL_ASSET_ID } from "./foliage-shader-catalog";
 import { getBuiltinRecipeAudio } from "./builtin-recipe-audio";
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import {
@@ -391,6 +393,12 @@ export const SCENE_RECIPE_IDS = {
   materialEmissiveStrength: "scene-recipe.material-emissive-strength",
   materialIor: "scene-recipe.material-ior",
   materialUnlit: "scene-recipe.material-unlit",
+  foliageBroadleaf: "scene-recipe.foliage-broadleaf",
+  foliageBroadleafLight: "scene-recipe.foliage-broadleaf-light",
+  foliageGardenTree: "scene-recipe.foliage-garden-tree",
+  foliageGardenTreeLight: "scene-recipe.foliage-garden-tree-light",
+  foliageShrub: "scene-recipe.foliage-shrub",
+  foliageShrubLight: "scene-recipe.foliage-shrub-light",
 } as const;
 
 /**
@@ -1124,6 +1132,108 @@ const TREE: SceneRecipe = {
     },
   ],
 };
+
+/**
+ * A tree whose leaves answer the Scene's wind.
+ *
+ * The model carries no picture of its own: bark and leaves come from the
+ * foliage Material, which every one of these trees shares. Retinting it in the
+ * Inspector therefore recolours the whole wood at once, and two copies of one
+ * model still differ, because the shader takes a random from where each stands.
+ */
+function swayingTree(
+  id: string,
+  name: string,
+  description: string,
+  modelId: string,
+): SceneRecipe {
+  return {
+    id,
+    name,
+    description,
+    category: "nature",
+    tags: ["木", "葉", "風", "シェーダー", "tree", "foliage", "wind"],
+    projectKinds: ["world", "item"],
+    preview: treePreview(modelId),
+    note: "葉と枝はシーン設定の風で揺れます。風を止めると動きも止まります。森にするときは複製して、位置・回転・大きさを変えてください。置いた場所ごとに色と揺れの間合いが変わります。",
+    parts: [
+      {
+        kind: "model",
+        name: "本体",
+        modelId,
+        materialAssetId: FOLIAGE_BROADLEAF_MATERIAL_ASSET_ID,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    ],
+  };
+}
+
+/**
+ * A tree is shown from where a person would stand to look at it. The card's
+ * usual camera sits above its subject, which for a tree is a view of the top
+ * of the crown, and it keeps a distance that leaves a tall tree small.
+ */
+function treePreview(modelId: string): NonNullable<SceneRecipe["preview"]> {
+  const bounds = getBuiltinRecipeModel(modelId)?.bounds;
+  if (!bounds) throw new Error(`Unknown tree model: ${modelId}`);
+  const height = bounds.max[1];
+  const width = Math.max(bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2]);
+  // Far enough for the card to hold the height and the width with a margin.
+  const distance = Math.max(height * 1.5, width * 1.25);
+  const eye = Math.max(1.5, height * 0.65);
+  return {
+    cameraPosition: [round2(distance * 0.566), round2(eye), round2(distance * 0.824)],
+    lookAtY: round2(height * 0.5),
+  };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+const FOLIAGE_BROADLEAF = swayingTree(
+  SCENE_RECIPE_IDS.foliageBroadleaf,
+  "広葉樹（風にそよぐ）",
+  "高さ約10mの広葉樹です。高い幹から太い枝が斜めに伸び、葉の束が風にそよぎます。",
+  "foliageBroadleaf",
+);
+
+const FOLIAGE_BROADLEAF_LIGHT = swayingTree(
+  SCENE_RECIPE_IDS.foliageBroadleafLight,
+  "広葉樹（風にそよぐ・軽量版）",
+  "「広葉樹（風にそよぐ）」の軽量版です。葉の枚数を約半分に、幹と枝の作りも簡単にしてあります。森のようにたくさん並べるときや、離れて見る場所に向きます。",
+  "foliageBroadleafLight",
+);
+
+const FOLIAGE_GARDEN_TREE = swayingTree(
+  SCENE_RECIPE_IDS.foliageGardenTree,
+  "庭木（風にそよぐ）",
+  "高さ約5mの、低く横に広がる木です。枝ぶりが見えるので、庭や広場の主役に向きます。",
+  "foliageGardenTree",
+);
+
+const FOLIAGE_GARDEN_TREE_LIGHT = swayingTree(
+  SCENE_RECIPE_IDS.foliageGardenTreeLight,
+  "庭木（風にそよぐ・軽量版）",
+  "「庭木（風にそよぐ）」の軽量版です。葉の枚数を約半分に、幹と枝の作りも簡単にしてあります。何本も並べるときや、離れて見る場所に向きます。",
+  "foliageGardenTreeLight",
+);
+
+const FOLIAGE_SHRUB = swayingTree(
+  SCENE_RECIPE_IDS.foliageShrub,
+  "低木（風にそよぐ）",
+  "高さ約1.7mの、こんもりした茂みです。木の根元や道の脇に置くと、地面とのつながりが自然になります。",
+  "foliageShrub",
+);
+
+const FOLIAGE_SHRUB_LIGHT = swayingTree(
+  SCENE_RECIPE_IDS.foliageShrubLight,
+  "低木（風にそよぐ・軽量版）",
+  "「低木（風にそよぐ）」の軽量版です。葉の枚数を約半分にしてあります。生け垣のようにたくさん並べるときに向きます。",
+  "foliageShrubLight",
+);
 
 const BAMBOO: SceneRecipe = {
   id: SCENE_RECIPE_IDS.bamboo,
@@ -2703,6 +2813,12 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   STONE_LANTERN,
   CANDELABRA,
   TREE,
+  FOLIAGE_BROADLEAF,
+  FOLIAGE_BROADLEAF_LIGHT,
+  FOLIAGE_GARDEN_TREE,
+  FOLIAGE_GARDEN_TREE_LIGHT,
+  FOLIAGE_SHRUB,
+  FOLIAGE_SHRUB_LIGHT,
   BAMBOO,
   ROCKS,
   STUMP,
@@ -2846,7 +2962,8 @@ export async function instantiateSceneRecipe(
       nextAssets = ensureBuiltinMaterialAsset(nextAssets, part.materialAssetId);
       const material = nextAssets.assets[part.materialAssetId];
       if (material?.kind !== "material") return null;
-      const withTextures = await ensureCatalogMaterialTextures(projectPath, nextAssets, material.properties);
+      // A Custom Shader Material names its pictures in its uniforms.
+      const withTextures = await ensureCatalogMaterialTextures(projectPath, nextAssets, catalogMaterialTextureSource(material));
       if (!withTextures) return null;
       nextAssets = withTextures;
     }

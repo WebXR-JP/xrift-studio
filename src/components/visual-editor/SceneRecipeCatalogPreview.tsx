@@ -4,6 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { getCatalogMaterialProperties, useCatalogMaterial } from "./useCatalogMaterial";
+import { getCatalogShaderMaterial, useCatalogShaderMaterials } from "./useCatalogShaderMaterials";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -21,6 +22,24 @@ import {
 import { CatalogPreviewFrame, useCatalogPreviewAssetLoad } from "./CatalogPreviewFrame";
 import { disposeCatalogModel } from "./dispose-catalog-model";
 import { attachMToonOutlines, updateMToonMaterials } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
+import type { ResolvedSceneLighting } from "../../lib/visual-editor/lighting-contract";
+import { DEFAULT_SCENE_SETTINGS } from "../../lib/visual-editor/scene-settings";
+import { resolveSceneWind, type ResolvedWind } from "../../lib/visual-editor/wind-contract";
+
+/**
+ * What a Custom Shader on a card is lit and blown by: the card's own neutral
+ * light (the directional and ambient lights below, for a set that brings no
+ * light of its own) and the wind a new Scene starts with.
+ */
+const CARD_LIGHT_DIRECTION = new THREE.Vector3(2.5, 4, 3).normalize();
+const CARD_LIGHTING: ResolvedSceneLighting = {
+  sunDirection: [CARD_LIGHT_DIRECTION.x, CARD_LIGHT_DIRECTION.y, CARD_LIGHT_DIRECTION.z],
+  sunColor: [1, 1, 1],
+  sunIntensity: 1.2,
+  ambientColor: [1, 1, 1],
+  ambientIntensity: 0.55,
+};
+const CARD_WIND: ResolvedWind = resolveSceneWind(DEFAULT_SCENE_SETTINGS.vegetation, undefined);
 
 /**
  * Builds the card from the recipe's own parts.
@@ -195,12 +214,31 @@ function RecipeTextVisual({
  * source.
  */
 function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; materialAssetId?: string }) {
-  const override = useCatalogMaterial(materialAssetId);
+  // A Custom Shader Material is built per mesh, the way the Scene View builds
+  // it; every other catalog Material is one material for the whole model.
+  const usesShader = getCatalogShaderMaterial(materialAssetId) !== undefined;
+  const shaderMaterials = useCatalogShaderMaterials(materialAssetId, CARD_LIGHTING, CARD_WIND);
+  const override = useCatalogMaterial(usesShader ? undefined : materialAssetId);
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const trackAssetLoad = useCatalogPreviewAssetLoad();
   useFrame((frame, delta) => {
     if (object) updateMToonMaterials(object, delta, frame.gl.info.render.frame, frame.gl);
   });
+
+  useEffect(() => {
+    if (!object || !shaderMaterials) return;
+    const originals = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+    object.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      originals.set(child, child.material);
+      child.material = shaderMaterials.forMesh(child.name);
+    });
+    // The hook owns the shader Materials. Give the GLB its own back first, so
+    // disposing the model does not dispose a Material another card may wear.
+    return () => {
+      for (const [mesh, material] of originals) mesh.material = material;
+    };
+  }, [object, shaderMaterials]);
 
   useEffect(() => {
     setObject(null);
@@ -220,7 +258,7 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
           return;
         }
         loaded = gltf.scene;
-        if (materialAssetId) {
+        if (materialAssetId && !usesShader) {
           loaded.traverse((object) => {
             if (!(object instanceof THREE.Mesh)) return;
             originals.set(object, object.material);
@@ -247,9 +285,11 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
       for (const [mesh, material] of originals) mesh.material = material;
       if (loaded) disposeCatalogModel(loaded);
     };
-  }, [modelId, materialAssetId, override, trackAssetLoad]);
+  }, [modelId, materialAssetId, override, trackAssetLoad, usesShader]);
 
-  if (!object) return null;
+  // Until its pictures have loaded, a shader model would show the GLB's plain
+  // fallback colours.
+  if (!object || (usesShader && !shaderMaterials)) return null;
   // Ownership lives in the loader effect; R3F must not dispose these twice.
   return <primitive object={object} dispose={null} />;
 }

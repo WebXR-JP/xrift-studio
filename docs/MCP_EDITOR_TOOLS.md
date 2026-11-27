@@ -238,7 +238,22 @@ MCP / API の `mode: "plan"` は Plan の検証までを行い、`status: "plann
 
 テクスチャの uniform は `colorSpace`（`srgb` または `linear`、省略時は変換なし）と `filter`（`linear` または `nearest`、省略時は `linear`）を指定できる。`texture` と `texture-3d` は `wrapS`・`wrapT` に、`texture-3d` はさらに `wrapR` にも `repeat` または `clamp-to-edge` を指定できる。省略時は `texture` が `repeat`、`texture-3d` が `clamp-to-edge` になる。32bit EXR を `filter: "linear"` で読むには端末側の対応が必要なため、数値テーブル用途には `filter: "nearest"` か 16bit EXR を使う。
 
+`texture`と`texture-cube`は`generateMipmaps`と`anisotropy`も持てる。`generateMipmaps: true`は、画像を元より小さく描く場所でMipmaps（縮小表示用の画像）を読む指定である。遠くの面や、細かく繰り返す面のちらつきを抑える。省略時と`false`では元の大きさの画像だけを読む。`filter`は1段階の中での読み方を決め、Mipmapsは隣り合う2段階を常に混ぜる。
+
+| `filter` | `generateMipmaps` | 拡大したとき | 縮小したとき |
+| --- | --- | --- | --- |
+| `linear` | 省略、`false` | 補間する | 元の画像だけを補間して読む |
+| `nearest` | 省略、`false` | 最も近い画素を読む | 元の画像だけから最も近い画素を読む |
+| `linear` | `true` | 補間する | 2段階のMipmapsをそれぞれ補間して読み、混ぜる |
+| `nearest` | `true` | 最も近い画素を読む | 2段階のMipmapsからそれぞれ最も近い画素を読み、混ぜる |
+
+Mipmapsの作り方は画像の形式で決まる。8bitの画像は読み込むときに作る。KTX2はファイルが持つMipmapsを使い、持たないファイルはMipmapsなしで読む。EXRには作らない。浮動小数のMipmapsを作れない端末があり、その端末では黒く描かれるためである。
+
+`anisotropy`は1〜16の整数で、斜めから見た面をぼかさずに描く。省略時は1で、効果はない。2以上は`generateMipmaps: true`と`filter: "linear"`（省略でもよい）の組み合わせでだけ指定できる。それ以外の組み合わせは描画に反映されないため、`CUSTOM_SHADER_INVALID`で拒否する。端末が対応する上限を超えた値は、その上限として扱われる。`texture-3d`は`generateMipmaps`と`anisotropy`を指定できない。
+
 `variants` の各要素は、`side`、`transparent`、`depthWrite`、`defines` に加えて、`blending`（`normal`、`additive`、`multiply`、`subtractive`、省略時は `normal`）と `frustumCulled`（省略時は `true`）を持てる。`blending` の指定は `transparent` の値を自動変更しないため、光や煙を重ねる場合は `transparent: true` と `depthWrite: false` も合わせて指定する。`frustumCulled: false` は、頂点シェーダーでメッシュを元の位置から大きく移動させる場合に指定する。この設定はそのマテリアルを付けたメッシュだけを視錐台カリングの対象から外し、マテリアルを外すと元に戻る。
+
+シーンが決める値は、次の名前のuniformを宣言したシェーダーにだけ渡る。マテリアルに保存した値の代わりに使われる。風は`uWindDirection`（`vector`、2個）、`uWindSpeed`、`uWindTurbulence`（`number`）。主光源と環境光は`uSunDirection`、`uSunColor`、`uAmbientColor`（`vector`、3個）、`uSunIntensity`、`uAmbientIntensity`（`number`）。割り当て先がプリミティブ、Terrain、モデルのどれでも、編集・Play・生成するワールド・Runtime JSONで同じ値になる。時刻は`uTime`などの名前か`animatedTimeUniform`で受け取る。
 
 形式が不正な記述は `CUSTOM_SHADER_INVALID` で拒否し、`details.diagnostics` に `uniforms.<名前>: …` や `variants[0]: …` の形式で原因をすべて返す。存在しないテクスチャ、その種の uniform で扱えないテクスチャ（`texture-3d` や `texture-cube` への KTX2・EXR、およびすべての種類への HDR）、サイズ条件を満たさない画像は `CUSTOM_SHADER_TEXTURE_INVALID` で拒否し、`details.uniforms` に対象の uniform 名、`details.diagnostics` に原因を返す。テクスチャは先に `import_texture_asset` で取り込み、`get_texture_asset` でサイズを確認してから指定する。いずれのエラーでもマテリアルは変更しない。
 
@@ -277,6 +292,8 @@ Custom Shader をモデルへ `set_material` で割り当てると、頂点シ�
 共有ソースの 3D モデルノード（`list_entities` が `modelNode` を返す Entity。Skin や Animation を持つ GLB / VRM の展開ノード）は、Entity 単体として削除できない。ジオメトリを親 3D モデルの共有メッシュが描画しているためである。そのため `delete_entity` を呼ぶと削除せず非表示（親メッシュの `modelPose.nodes[i].visible: false`）に変換し、戻り値の `deleted: false` と `modelNodeVisibility: "hidden"` でその旨を伝える。再表示は `set_entity_enabled`（`enabled: true`）で行う。3D モデルから完全に取り除くには、元のソースモデルを編集して再インポートする。`set_entity_enabled` はこのノードに対して `enabled` とポーズの可視状態を同時に更新するため、シーン・公開ワールド・ランタイムの間で見た目が一致する。
 
 `list_scene_recipes` は焚き火・松明・木・岩・雪・噴水・柱・階段・井戸・ベンチ・収録スタジオといった出来合いの 3D セット一覧を返す。配置には `local-asset` サーフェスの `apply_scene_recipe` を使う。各セットはライト・パーティクル・マテリアルが互いに調整されたサブツリーであり、同じものをプリミティブから組み上げると十数回の呼び出しが必要なうえ見栄えも劣る。`note` には配置後の残作業が記されているため、見落とさず確認すること。
+
+風にそよぐ木には、広葉樹（`scene-recipe.foliage-broadleaf`）、庭木（`scene-recipe.foliage-garden-tree`）、低木（`scene-recipe.foliage-shrub`）と、それぞれの軽量版（`scene-recipe.foliage-broadleaf-light`、`scene-recipe.foliage-garden-tree-light`、`scene-recipe.foliage-shrub-light`）がある。初回の配置では木のモデルに加え、カスタムシェーダーのマテリアル `foliage-shader-broadleaf-material` と、葉・樹皮のテクスチャを 2 枚追加する。どの木も同じマテリアルを使うため、2 本目以降はモデルだけが増える。軽量版は葉の束が約半分で、たくさん並べる木や離れて見る木に向く。葉の色や揺れの強さは `get_custom_shader` で確認し、`update_custom_shader` で uniform を変更する。変更はそのマテリアルを使うすべての木に反映される。風や光の uniform（`uWindDirection`、`uSunDirection` など）はシーンが設定するため、手動で値を入れても次の描画で上書きされる。風は `update_scene_settings` の `vegetation` で変更する。
 
 「しかけ・チュートリアル」カテゴリのセットは、形状に加えて音源とノードグラフまで組み込んだ状態で配置される。`behaviours` には操作時に起きる挙動が 1 本ずつ記されており、`lesson` にはそのセットが解説する手順が入っている。「押すと音が鳴る」「押すと灯りが点く」「開いて自動で閉じる」といった仕掛けを、`add_component` と `create_interactivity_asset` を何度も呼んで一から組み直す必要はない。配置されるのは通常の Interactable・Audio Source・グラフ実行 Component であるため、配置後は通常のツールでそのまま編集できる。
 

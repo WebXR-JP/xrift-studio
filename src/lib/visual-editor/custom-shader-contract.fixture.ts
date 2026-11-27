@@ -151,8 +151,25 @@ function assertNewFieldsAreValidated(): void {
       })),
       colorSpace: "srgb",
       generateMipmaps: true,
+      anisotropy: 4,
       filter: "linear",
     },
+    // A picture read through its mip levels, sharpened where it is seen at a slant.
+    uBark: {
+      kind: "texture",
+      textureAssetId: "texture-bark",
+      generateMipmaps: true,
+      anisotropy: CLASSIC_SHADER_LIMITS.anisotropy,
+    },
+    uBarkNearest: {
+      kind: "texture",
+      textureAssetId: "texture-bark",
+      generateMipmaps: true,
+      filter: "nearest",
+    },
+    // 1 is "no anisotropic filtering", so it asks for nothing and fits anywhere.
+    uPlain: { kind: "texture", textureAssetId: "texture-bark", anisotropy: 1 },
+    uPlainNearest: { kind: "texture", textureAssetId: "texture-bark", filter: "nearest", anisotropy: 1 },
   };
   const shader = shaderWith({
     uniforms: accepted,
@@ -190,6 +207,19 @@ function assertNewFieldsAreValidated(): void {
     ["a cube map with five faces", { kind: "texture-cube", faces: Array(5).fill({ textureAssetId: "t" }) }],
     ["a cube map with a face without an Asset", { kind: "texture-cube", faces: [...Array(5).fill({ textureAssetId: "t" }), {}] }],
     ["a cube map with a bad colour space", { kind: "texture-cube", faces: Array(6).fill({ textureAssetId: "t" }), colorSpace: "p3" }],
+    ["an anisotropy of zero", { kind: "texture", textureAssetId: "t", generateMipmaps: true, anisotropy: 0 }],
+    [
+      "an anisotropy over the limit",
+      { kind: "texture", textureAssetId: "t", generateMipmaps: true, anisotropy: CLASSIC_SHADER_LIMITS.anisotropy + 1 },
+    ],
+    ["an anisotropy that is not whole", { kind: "texture", textureAssetId: "t", generateMipmaps: true, anisotropy: 2.5 }],
+    ["an anisotropy that is not a number", { kind: "texture", textureAssetId: "t", generateMipmaps: true, anisotropy: "8" }],
+    // The renderer would ignore these, so they are refused instead of saved.
+    ["an anisotropy without mip levels", { kind: "texture", textureAssetId: "t", anisotropy: 8 }],
+    ["an anisotropy with mip levels switched off", { kind: "texture", textureAssetId: "t", generateMipmaps: false, anisotropy: 2 }],
+    ["an anisotropy on a nearest filter", { kind: "texture", textureAssetId: "t", generateMipmaps: true, filter: "nearest", anisotropy: 8 }],
+    ["a cube map anisotropy without mip levels", { kind: "texture-cube", faces: Array(6).fill({ textureAssetId: "t" }), anisotropy: 8 }],
+    ["a volume asking for anisotropy", { kind: "texture-3d", textureAssetId: "t", anisotropy: 2 }],
     ["an unknown kind", { kind: "sampler", value: 1 }],
   ];
   for (const [label, uniform] of refused) {
@@ -201,6 +231,19 @@ function assertNewFieldsAreValidated(): void {
       `${label} must be refused with its uniform named: ${JSON.stringify(errors)}`,
     );
   }
+  // The reason says what to change: the range, or what the option depends on.
+  const reason = (uniform: unknown) =>
+    validateClassicR3fMaterialShader(
+      shaderWith({ uniforms: { uValue: uniform as ClassicR3fShaderUniform } }),
+    ).join();
+  assert(
+    reason({ kind: "texture", textureAssetId: "t", generateMipmaps: true, anisotropy: 32 }).includes(
+      `1〜${CLASSIC_SHADER_LIMITS.anisotropy}`,
+    ) &&
+      reason({ kind: "texture", textureAssetId: "t", anisotropy: 8 }).includes("generateMipmaps") &&
+      reason({ kind: "texture", textureAssetId: "t", generateMipmaps: true, filter: "nearest", anisotropy: 8 }).includes("filter"),
+    "a refused anisotropy must say its range, or which option it depends on",
+  );
   for (const [label, variant] of [
     ["an unknown blending", { ...BASE_VARIANT, blending: "screen" }],
     ["a blending that is not text", { ...BASE_VARIANT, blending: 2 }],
@@ -339,6 +382,7 @@ function assertDescriptorsSurviveSaving(): void {
       uWeights: { kind: "array", value: [0.1, -0.2, 1e-7, 3] },
       uLut: { kind: "texture-3d", textureAssetId: lut.id, slices: 16, wrapR: "repeat" },
       uSky: { kind: "texture-cube", faces: faces.map((face) => ({ textureAssetId: face.id })) },
+      uBark: { kind: "texture", textureAssetId: lut.id, generateMipmaps: true, anisotropy: 8 },
       uTime: { kind: "number", value: 0 },
     },
     variants: [{ ...BASE_VARIANT, blending: "additive", transparent: true, depthWrite: false, frustumCulled: false }],
@@ -379,6 +423,24 @@ function assertDescriptorsSurviveSaving(): void {
         (variant) => !("blending" in variant) && !("frustumCulled" in variant),
       ),
     "saving an older descriptor must not add the new fields to it",
+  );
+  const oldTexture = updateMaterialAsset(
+    { ...project.assets, assets: { ...project.assets.assets, [lut.id]: lut } },
+    materialId,
+    {
+      shader: shaderWith({
+        uniforms: { uMap: { kind: "texture", textureAssetId: lut.id, generateMipmaps: true } },
+      }),
+    },
+  );
+  const writtenTexture = (
+    (JSON.parse(assetManifestCodec.serialize(oldTexture)) as AssetManifest).assets[materialId] as MaterialAsset
+  ).shader;
+  assert(
+    writtenTexture?.kind === "classic-r3f" &&
+      stableSerializeJson(writtenTexture.uniforms.uMap) ===
+        stableSerializeJson({ kind: "texture", textureAssetId: lut.id, generateMipmaps: true }),
+    "saving a texture uniform without anisotropy must not add it",
   );
 
   // A reference to an Asset that is not a Texture is refused at the uniform.

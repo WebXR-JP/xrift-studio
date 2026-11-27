@@ -584,6 +584,11 @@ uniform の型と variant の仕様は次の通りである。
 - uniform の型: `number`、`color`、`vector`、`matrix`（9 個または 16 個、列優先）、`array`（1〜4096 個の数値）、`texture`、`texture-3d`、`texture-cube`。
 - variant の項目: `side`、`transparent`、`depthWrite`、`defines`、`blending`、`frustumCulled`。後から追加した項目はすべて省略可能とし、省略時は従来の描画結果になる。上限値の根拠は `CLASSIC_SHADER_LIMITS` の注釈に記す。
 - テクスチャ管理: テクスチャは Texture Asset ごとに 1 回だけ読み込み、uniform ごとに複製を渡す。複製は画像データを共有し、サンプラー設定だけを個別に持つ。`texture` は 8bit 画像・KTX2・EXR を読み込む。EXR は `classic-shader-data-texture.ts` がファイルの精度（16bit または 32bit）のまま読み込む。`texture-3d` は横並びの 8bit 画像から、`texture-cube` は 6 枚の 8bit 画像から生成し、同一画像からは 1 つだけ作成する。2D 画像は上端が v = 1、3D は画像の上端が y = 0 になる。
+
+`texture`と`texture-cube`は、`generateMipmaps: true`でMipmapsを読む。`filter`は1段階の中の読み方を決め、隣り合う2段階は常に混ぜる。`linear`は`LinearMipmapLinearFilter`、`nearest`は`NearestMipmapLinearFilter`になる。8bitの画像は読み込むときにMipmapsを作る。KTX2はファイルが持つMipmapsを使い、持たなければ元の画像だけを読む。EXRには作らない。浮動小数のMipmapsは端末の拡張機能がないと作れず、作れない端末では黒く描かれるためである。`anisotropy`（1〜16）は、three.jsがMipmapsを読み`filter`が`linear`の場合にだけ反映する。それ以外で2以上を指定した記述は、検証で拒否する。Texture Asset自身のサンプラー設定はuniformへ引き継がない。
+
+シーンが決めるuniformは、宣言したシェーダーにだけ渡す。風は`uWindDirection`・`uWindSpeed`・`uWindTurbulence`、主光源と環境光は`uSunDirection`・`uSunColor`・`uSunIntensity`・`uAmbientColor`・`uAmbientIntensity`である。編集画面とPlayは、`scene-driven-uniforms.ts`の`applyWindDrivenUniforms`と`applyLightingDrivenUniforms`で、描画中のマテリアルへ書き込む。プリミティブとTerrainはMeshごとのhookが、モデルは`ProjectModelVisual`が書き込む。モデルはMeshとスロットごとにvariantを選んでマテリアルを組み立てるため、そのすべてが対象になる。プレビューなどScene Viewの外で描くモデルには渡さず、マテリアルに保存した値を使う。公開物では、`compiler/classic-shader-publish.ts`の`publishedSceneClassicShader`が記述へ書き込む。生成するワールドとRuntime JSONのマニフェストは同じ記述を持つ。Runtime JSONの読み込みは、シーンの風とライトを読まない。
+
 - メッシュ状態と時刻 uniform: `frustumCulled: false` はマテリアルの `userData` に記録し、`applyClassicShaderMeshState` がそのマテリアルを割り当てたメッシュへ反映する。マテリアルを外したとき、他に同じ指定を持つマテリアルがなければメッシュの元の値へ戻す。時刻 uniform は `userData.xriftTimeUniforms` に記録し、各経路が `advanceMaterialTimeUniforms` で進める。組み立て後に `uniforms` オブジェクト自体やその要素を差し替えず、値だけを書き換える。
 
 #### マテリアルの新規作成
