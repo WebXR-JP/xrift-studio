@@ -467,7 +467,7 @@ export function VisualUploadDialog({
             <p className="mt-1 text-sm leading-6 text-slate-600">
               編集内容を保存し、XRiftに公開します。
             </p>
-            <GuideExternalLink page="publishing" label="公開の手順（ブラウザー）" />
+            <GuideExternalLink page="publishing" label="公開の手順（ブラウザ）" />
           </div>
           <button
             type="button"
@@ -780,7 +780,7 @@ export function VisualUploadDialog({
                 公開準備を取り消しました
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-                {error || "制作データと保存済みの内容は保持されています。"}
+                {error || "制作データと保存済みの内容はそのまま残っています。"}
               </p>
             </div>
           ) : (
@@ -919,7 +919,7 @@ export function VisualUploadDialog({
               : stage === "succeeded"
                 ? "XRiftから公開結果を受信しました"
                 : stage === "cancelled"
-                  ? "制作データは保持されています"
+                  ? "制作データはそのまま残っています"
                   : stage === "failed"
                     ? "原因を確認してから再試行できます"
                     : progress?.label ?? "処理中…"}

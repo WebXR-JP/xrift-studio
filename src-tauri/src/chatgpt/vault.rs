@@ -10,11 +10,11 @@ use sha2::{Digest, Sha256};
 const CHUNK_BYTES: usize = 2_000;
 const MAX_RECORD_BYTES: usize = 64 * 1024;
 const MAX_CHUNKS: usize = 40;
-const READ_ERROR: &str = "OSに保存したChatGPTの接続を読み取れませんでした";
+const READ_ERROR: &str = "OSに保存されたChatGPTの接続情報を読み取れませんでした";
 const WRITE_ERROR: &str =
-    "ChatGPTの接続をOSに保存できませんでした。次回起動時は再接続が必要になる場合があります";
+    "ChatGPTの接続情報をOSに保存できませんでした。次回起動時は再接続が必要になる場合があります";
 const DELETE_ERROR: &str =
-    "OSに保存したChatGPTの接続を削除できませんでした。OSの資格情報ストアを確認してください";
+    "OSに保存されたChatGPTの接続情報を削除できませんでした。OSの資格情報ストアを確認してください";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,7 +69,7 @@ impl OsStore<'_> {
             target_os = "macos",
             target_os = "linux"
         )) {
-            return Err("この端末ではChatGPTの接続を安全に保存できません".into());
+            return Err("この端末ではChatGPTの接続情報を安全に保存できません".into());
         }
         keyring::Entry::new(self.service, name)
             .map_err(|_| "OSの資格情報ストアを開けませんでした".into())

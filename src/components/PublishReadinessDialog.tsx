@@ -86,7 +86,7 @@ export function PublishReadinessDialog({
             公開前の確認
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            タイトル・説明・サムネイルを設定してください。保存すると、公開前の確認を続けます。
+            公開の前にタイトル・説明・サムネイルを設定してください。保存すると、そのまま公開前の確認へ進みます。
           </p>
         </div>
 

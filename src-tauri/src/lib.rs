@@ -706,7 +706,7 @@ async fn check_xrift_latest() -> Result<Option<String>, String> {
 async fn update_xrift(app: AppHandle) -> Result<(), String> {
     let _guard = RUNTIME_INSTALL_LOCK
         .try_lock()
-        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
+        .map_err(|_| "ツールの準備または更新を実行中です。完了までお待ちください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
     if !node_runtime_installed(&paths) {
         return Err("Node.jsのセットアップを先に完了してください。".to_string());
@@ -737,7 +737,7 @@ async fn update_xrift(app: AppHandle) -> Result<(), String> {
 async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
     let _guard = RUNTIME_INSTALL_LOCK
         .try_lock()
-        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
+        .map_err(|_| "ツールの準備または更新を実行中です。完了までお待ちください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
 
     for d in [
@@ -834,13 +834,13 @@ fn list_projects(root: String) -> Result<Vec<Project>, String> {
     let root_path = PathBuf::from(&root);
     if !root_path.exists() {
         if let Err(e) = std::fs::create_dir_all(&root_path) {
-            return Err(format!("プロジェクトディレクトリを作成できません: {}", e));
+            return Err(format!("プロジェクトフォルダーを作成できません: {}", e));
         }
     }
     let mut projects = Vec::new();
     let entries = match std::fs::read_dir(&root_path) {
         Ok(r) => r,
-        Err(e) => return Err(format!("プロジェクトディレクトリを読み込めません: {}", e)),
+        Err(e) => return Err(format!("プロジェクトフォルダーを読み込めません: {}", e)),
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -3303,7 +3303,7 @@ fn select_unique_publication_candidate(
     }
     if by_id.len() > 1 {
         return Err(
-            "以前のXRift公開先が複数見つかったため、自動では選択できません。再アップロードせず公開先IDを確認してください。"
+            "以前のXRift公開先が複数見つかったため、自動では選択できません。再度公開せず公開先IDを確認してください。"
                 .to_string(),
         );
     }
@@ -3478,7 +3478,7 @@ fn resolve_authoring_publication_metadata(
             return Ok((Some(loaded), true));
         }
         return Err(
-            "以前のXRift公開先IDを復元できません。別のワールドを作らないようアップロードを停止しました。"
+            "以前のXRift公開先IDを復元できません。別のワールドが作られないよう公開を停止しました。"
                 .to_string(),
         );
     }
@@ -4765,7 +4765,7 @@ fn read_local_model_import_source_path(
         let mut header = [0; 20];
         file.read_exact(&mut header).map_err(|_| "GLBヘッダーを読み取れませんでした".to_string())?;
         if !model_source_size_is_supported(mime_type, source_metadata.len(), &header) {
-            return Err("GLBヘッダーとファイルの長さを確認できませんでした".to_string());
+            return Err("GLBヘッダーとファイルサイズを確認できませんでした".to_string());
         }
         std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(0))
             .map_err(|_| "local Model source cannot be read".to_string())?;
@@ -6144,7 +6144,7 @@ fn recording_begin_file(
     let use_ffmpeg = match request.encoder.as_deref() {
         None | Some("container") => false,
         Some("ffmpeg-frames") => true,
-        Some(_) => return Err("録画のエンコーダーの指定が不正です。".to_string()),
+        Some(_) => return Err("録画エンコーダーの指定が不正です。".to_string()),
     };
     let frame_rate = request.frame_rate.unwrap_or(30).clamp(1, 120);
     let stem: String = request
@@ -6322,7 +6322,7 @@ fn recording_append_chunk(
     match &mut entry.writer {
         RecordingWriter::Container(file) => {
             if repeats != 1 {
-                return Err("コンテナ経路の録画データは繰り返せません。".to_string());
+                return Err("この録画方式では録画データを繰り返せません。".to_string());
             }
             file.write_all(bytes)
                 .map_err(|error| format!("録画データを書き込めません: {}", error))?
@@ -6381,7 +6381,7 @@ fn recording_close_file(
             if !status.success() {
                 let tail: String = log_text.lines().rev().take(3).collect::<Vec<_>>().join(" / ");
                 return Err(format!(
-                    "FFmpegが動画を書き終えられませんでした ({}){}",
+                    "FFmpegでの動画の書き出しが完了しませんでした ({}){}",
                     status,
                     if tail.is_empty() { String::new() } else { format!(": {}", tail) }
                 ));

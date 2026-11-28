@@ -51,7 +51,7 @@ export function createAssetImportTransactionId(scope: string): string {
   );
   // 呼び出し側が壊れたidをRustへ渡さないよう、ここで必ず弾く。
   if (!isValidAssetImportTransactionId(id)) {
-    throw new Error("素材書き込み用のtransaction idを生成できませんでした。");
+    throw new Error("素材書き込み用のトランザクションIDを生成できませんでした。");
   }
   return id;
 }

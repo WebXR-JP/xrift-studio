@@ -21,7 +21,7 @@ const object = (value: unknown): value is Record<string, unknown> => value !== n
 const keys = (value: Record<string, unknown>, allowed: readonly string[]) => Object.keys(value).every(key => allowed.includes(key));
 const integer = (value: unknown, minimum: number, maximum: number): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum;
 const digest = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
-function invalid(): never { throw new Error("制作の進展記録を読み込めません。最新のSceneから制作を再開してください。"); }
+function invalid(): never { throw new Error("制作の進捗記録を読み込めませんでした。最新のSceneからやり直してください。"); }
 function freeze<T>(value: T): T {
   if (value && typeof value === "object") { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
   return value;
@@ -75,7 +75,7 @@ export function observeAuthoringProgress(previous: AuthoringProgress | undefined
   const history = previous ? normalizeAuthoringProgress(previous).observations : [];
   const last = history[history.length - 1];
   if (!integer(input.pass, (last?.pass ?? 0) + 1, Number.MAX_SAFE_INTEGER) || !digest(input.planFingerprint) || !digest(input.beforeFingerprint)
-    || !digest(input.afterFingerprint) || input.continuing !== undefined && typeof input.continuing !== "boolean") throw new Error("制作の進展情報が不正です。");
+    || !digest(input.afterFingerprint) || input.continuing !== undefined && typeof input.continuing !== "boolean") throw new Error("制作の進捗情報の形式が正しくありません。");
   // A manual edit or a new request can break continuity. Earlier automated states
   // cannot turn a legitimate change after that boundary into an apparent cycle.
   const continuous = last?.afterFingerprint === input.beforeFingerprint;

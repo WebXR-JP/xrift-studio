@@ -76,7 +76,7 @@ export function mergeExternalStoreImport(
   for (const id of changedIds) {
     if (before.assets[id] === imported.assets[id] || canonicalImportValue(before.assets[id]) === canonicalImportValue(imported.assets[id])) continue;
     if (authoredImportAsset(before.assets[id]) !== authoredImportAsset(latest.assets[id])) {
-      throw new Error("取り込む素材が処理中に編集されました。編集内容を保ち、追加を停止しました。");
+      throw new Error("取り込む素材が処理中に編集されました。編集内容を守るため、追加を中止しました。");
     }
     if (imported.assets[id]) assets[id] = imported.assets[id];
     else delete assets[id];
@@ -86,7 +86,7 @@ export function mergeExternalStoreImport(
   for (const id of new Set([...Object.keys(before.folders ?? {}), ...Object.keys(imported.folders ?? {})])) {
     if (canonicalImportValue(before.folders?.[id]) === canonicalImportValue(imported.folders?.[id])) continue;
     if (canonicalImportValue(before.folders?.[id]) !== canonicalImportValue(latest.folders?.[id])) {
-      throw new Error("取り込み先のフォルダーが処理中に編集されました。追加を停止しました。");
+      throw new Error("取り込み先のフォルダーが処理中に編集されました。追加を中止しました。");
     }
     if (imported.folders?.[id]) folders[id] = imported.folders[id];
     else delete folders[id];
@@ -220,7 +220,7 @@ export function applyExternalStoreInstall(
 
   if (result.assetKind === "audio") {
     const file = result.files.find((entry) => entry.role === "audio");
-    if (!file) throw new Error("Audio用のファイルがありません");
+    if (!file) throw new Error("音声用のファイルがありません");
     const mimeType =
       AUDIO_MIME_BY_FORMAT[file.format as keyof typeof AUDIO_MIME_BY_FORMAT];
     if (!mimeType) {

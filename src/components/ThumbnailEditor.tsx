@@ -95,7 +95,7 @@ export function ThumbnailEditor({
         </div>
         {publishPreparation && (
           <div className="mt-1 text-xs text-amber-800">
-            画像を保存すると、公開前の確認を続けます。
+            画像を保存すると、そのまま公開前の確認へ進みます。
           </div>
         )}
       </div>

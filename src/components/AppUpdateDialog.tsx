@@ -127,7 +127,7 @@ export function AppUpdateDialog({
                 {state.releaseNotes?.trim() || "更新内容の説明はありません。"}
               </div>
               <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-                インストールが完了するとアプリが再起動します。プロジェクトとアプリ専用のNode.js・@xrift/cliはそのまま使えます。
+                インストールが終わるとアプリが自動で再起動します。保存済みのプロジェクトやアプリ専用のNode.js・@xrift/cliはそのまま引き継がれます。
               </p>
             </>
           )}

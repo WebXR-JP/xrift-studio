@@ -142,7 +142,7 @@ function useModel(url: string, format: Format) {
           });
           obj = new THREE.Mesh(geometry, material);
         } else {
-          throw new Error("unsupported format");
+          throw new Error("未対応の3Dモデル形式です");
         }
         if (!cancelled) {
           setObject(obj);
@@ -183,7 +183,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
   if (!format) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white text-sm text-zinc-400">
-        未対応の3Dフォーマット
+        未対応の3Dモデル形式です
       </div>
     );
   }
@@ -207,7 +207,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
           {stats && (
             <span className="flex items-center gap-2 text-[11px] text-zinc-500">
               <Info size={10} strokeWidth={2} />
-              {stats.meshes} meshes · {stats.vertices.toLocaleString()} verts · {stats.triangles.toLocaleString()} tris · {stats.materials} mats
+              {stats.meshes} メッシュ · {stats.vertices.toLocaleString()} 頂点 · {stats.triangles.toLocaleString()} 三角形 · {stats.materials} マテリアル
             </span>
           )}
           <button

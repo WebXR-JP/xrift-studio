@@ -1020,7 +1020,7 @@ function MeshInspector({
             : openBrush && !assigned
               ? "元のブラシを使用しています。マテリアルをドロップすると、表示を置き換えます。"
               : openBrush
-                ? "Open BrushのShaderを、指定したマテリアルで置き換えています。マテリアルをドロップして変更できます"
+                ? "Open Brushのシェーダーを、指定したマテリアルで置き換えています。マテリアルをドロップして変更できます"
                 : "マテリアルをドロップして割り当てできます";
           return (
             <div
@@ -1086,7 +1086,7 @@ function MeshInspector({
                   className="h-7 min-w-0 rounded-sm border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">
-                    {openBrush ? "OpenBrush Brushシェーダー" : "未設定"}
+                    {openBrush ? "Open Brush専用シェーダー" : "未設定"}
                   </option>
                   {materials.map((material) => (
                     <option key={material.id} value={material.id}>{material.name}</option>
@@ -2897,14 +2897,14 @@ function ModelNodeColliderBakePanel({
   return (
     <ComponentCard title="Colliderの軽量化">
       <p className="text-xs leading-5 text-slate-600">
-        歩行面など細部が要らない箇所はCollider用の軽量Modelに置き換えます。「{nodeName}
-        」の描画Meshは変わりません。
+        歩行面など細部が要らない箇所はCollider用の軽量モデルに置き換えます。「{nodeName}
+        」の見た目のメッシュは変わりません。
       </p>
       {baked?.kind === "model" ? (
         <div className="space-y-1.5 rounded border border-emerald-200 bg-emerald-50 p-2">
           <p className="text-xs leading-5 text-emerald-900">
-            現在の軽量Model: {baked.name}
-            {bakedTriangles !== undefined ? `（${bakedTriangles} primitive）` : ""}
+            現在の軽量モデル: {baked.name}
+            {bakedTriangles !== undefined ? `（${bakedTriangles} 描画単位）` : ""}
           </p>
           <button
             type="button"
@@ -2912,7 +2912,7 @@ function ModelNodeColliderBakePanel({
             onClick={() => onClear?.(entityId, collider.id)}
             className="h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
           >
-            元のMeshに戻す
+            元のメッシュに戻す
           </button>
         </div>
       ) : null}
@@ -2939,8 +2939,8 @@ function ModelNodeColliderBakePanel({
       {pendingRatio !== null ? (
         <div className="space-y-1.5 rounded border border-teal-200 bg-teal-50 p-2">
           <p className="text-xs leading-5 text-teal-900">
-            軽量Modelを{Math.round(pendingRatio * 100)}
-            %のポリゴンで作り直します。描画Meshは変わりません。
+            軽量モデルを{Math.round(pendingRatio * 100)}
+            %のポリゴンで作り直します。見た目のメッシュは変わりません。
           </p>
           <div className="flex gap-1.5">
             <button
@@ -2953,7 +2953,7 @@ function ModelNodeColliderBakePanel({
               }}
               className="h-8 flex-1 rounded-md border border-teal-600 bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {busy ? "作成中…" : "軽量Modelを作る"}
+              {busy ? "作成中…" : "軽量モデルを作る"}
             </button>
             <button
               type="button"
@@ -3341,8 +3341,8 @@ function ModelPoseEditor({
                   step={1}
                   value={roundTo((rotation[index] * 180) / Math.PI, 2)}
                   disabled={readOnly}
-                  ariaLabel={`Bone回転 ${axis}`}
-                  scrubLabel={`Bone ${axis}`}
+                  ariaLabel={`ボーン回転 ${axis}`}
+                  scrubLabel={`ボーン ${axis}`}
                   onChange={(next) => updateBoneAxis(index, next)}
                   wrapperClassName="mt-1"
                 />
@@ -3396,7 +3396,7 @@ function ModelPoseEditor({
 
       {missingTargetCount > 0 ? (
         <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs leading-4 text-amber-800">
-          再インポート後に見つからないポーズ対象が{missingTargetCount}件あります。残っている対象だけを適用しています。リセットすると未適用値を整理できます。
+          再インポートで見つからなくなったポーズ対象が{missingTargetCount}件あります。残っている対象だけを適用しています。リセットすると不要なデータを整理できます。
         </p>
       ) : null}
 
@@ -3484,7 +3484,7 @@ function ColliderInspector({
 
       {bodyOwner ? (
         <p className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-          Rigid Body: {bodyOwner.name}。このColliderは親Bodyの形状として使われます。
+          Rigid Body: {bodyOwner.name}。このColliderは親のRigid Bodyの形状として使われます。
         </p>
       ) : (
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
@@ -3713,13 +3713,13 @@ function RigidBodyInspector({
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
           {component.autoColliders === "none"
             ? "Colliderがありません。子Entityに追加してください。"
-            : "自動生成に使えるMeshがありません。"}
+            : "自動生成に使えるメッシュがありません。"}
         </p>
       ) : null}
       {component.autoColliders === "trimesh" &&
       component.bodyType !== "fixed" ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
-          動く物体の動作確認と書き出しには、Convex Hullの凸形状を使います。
+          動く物体のPlayと書き出しには、Convex Hull（凸包）の形状を使います。
         </p>
       ) : null}
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">

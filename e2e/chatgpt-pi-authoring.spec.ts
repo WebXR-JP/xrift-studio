@@ -149,7 +149,7 @@ test("Blender progress images appear in the owning chat without entering persist
   await call(page, "open_chatgpt_panel");
   const id = await generate(page);
   await expect.poll(async () => (await job(page, id)).status).toBe("completed");
-  const gallery = page.getByRole("region", { name: "Blenderの制作画像", exact: true });
+  const gallery = page.getByRole("region", { name: "Blenderの制作プレビュー", exact: true });
   await expect(gallery.getByRole("img")).toHaveCount(4);
   await expect(gallery.getByRole("img", { name: "Blenderの検証モデルの形状プレビュー（5/5パーツ）", exact: true })).toBeVisible();
   expect(await gallery.getByRole("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth === 480))).toBe(true);

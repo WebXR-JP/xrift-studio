@@ -54,7 +54,7 @@ export function ParticlePresetCatalogPreview({
     return Math.max(2.2, Math.min(9, Math.max(spread, burstSpread) * 0.9 + 1.6));
   }, [config]);
 
-  if (textureError) return <div role="alert" className={`${className} flex items-center justify-center bg-slate-900 p-3 text-xs text-white`}>Particleのテクスチャを読み込めませんでした</div>;
+  if (textureError) return <div role="alert" className={`${className} flex items-center justify-center bg-slate-900 p-3 text-xs text-white`}>パーティクルのテクスチャを読み込めませんでした</div>;
   return (
     <CatalogPreviewFrame
       cacheKey={`particle-textured-v1:${preset.id}`}

@@ -111,7 +111,7 @@ export async function validateR3fStaticSource(source: string): Promise<void> {
         if (!ts.isJsxAttribute(attribute)) continue;
         const key = attribute.name.getText(file);
         if (key === "ref" || /^on[A-Z]/u.test(key) || key === "visible") fail(attribute, `${key}の実行時動作は通常のComponent設定で追加してください`);
-        if (/Material$/u.test(name) && !["color", "metalness", "roughness", "side"].includes(key)) fail(attribute, `Material.${key}を保持できません。対応するPBR値だけを使ってください`);
+        if (/Material$/u.test(name) && !["color", "metalness", "roughness", "side"].includes(key)) fail(attribute, `Material.${key}には対応していません。対応するPBR値だけを使ってください`);
       }
     }
     ts.forEachChild(node, visit);

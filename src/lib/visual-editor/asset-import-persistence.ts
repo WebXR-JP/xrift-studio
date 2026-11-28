@@ -363,7 +363,7 @@ export async function reimportModelAssetFromDisk(
     return failedModelReimport(
       manifest,
       diagnostics,
-      "モデルの再取り込みに失敗しました。元の素材は保持されています",
+      "モデルの再取り込みに失敗しました。元の素材はそのまま残っています",
       onProgress,
     );
   }

@@ -113,28 +113,28 @@ type AssetReferenceDocuments = {
 };
 
 const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
-  "scene-geometry": "メッシュのGeometry",
+  "scene-geometry": "メッシュの形状",
   "scene-material": "メッシュのマテリアルスロット",
   "scene-particle": "パーティクルの放出",
   "scene-audio": "音源",
   "scene-prefab": "プレハブの配置",
-  "scene-script": "Script Component",
-  "scene-script-asset": "Scriptの素材参照",
+  "scene-script": "スクリプトComponent",
+  "scene-script-asset": "スクリプトの素材参照",
   "scene-text": "テキストの背景",
-  "scene-xrift": "XRiftのComponent",
+  "scene-xrift": "XRift公式Component",
   "material-texture": "マテリアルのテクスチャ",
   "model-material": "モデルの既定マテリアルスロット",
   "particle-material": "パーティクルのマテリアル",
   "particle-texture": "パーティクルのテクスチャ",
-  "prefab-geometry": "プレハブ内メッシュのGeometry",
+  "prefab-geometry": "プレハブ内メッシュの形状",
   "prefab-material": "プレハブ内メッシュのマテリアルスロット",
   "prefab-particle": "プレハブ内のパーティクルの放出",
-  "prefab-audio": "プレハブ音源",
+  "prefab-audio": "プレハブ内の音源",
   "prefab-prefab": "入れ子のプレハブ",
-  "prefab-script": "プレハブ内のScript Component",
-  "prefab-script-asset": "プレハブ内のScriptの素材参照",
+  "prefab-script": "プレハブ内のスクリプトComponent",
+  "prefab-script-asset": "プレハブ内のスクリプトの素材参照",
   "prefab-text": "プレハブ内テキストの背景",
-  "prefab-xrift": "プレハブ内のXRiftのComponent",
+  "prefab-xrift": "プレハブ内のXRift公式Component",
 };
 
 export function assetReferenceKindLabel(kind: AssetReferenceKind): string {

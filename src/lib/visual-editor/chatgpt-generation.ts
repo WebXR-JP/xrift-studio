@@ -8,7 +8,7 @@ function mergeChangedEntries<T extends object>(before: T, next: T, latest: T): T
   const oldValues = before as Record<string, unknown>, newValues = next as Record<string, unknown>, currentValues = latest as Record<string, unknown>;
   for (const key of new Set([...Object.keys(before), ...Object.keys(next)])) {
     if (equalAuthoredValue(oldValues[key], newValues[key])) continue;
-    if (!equalAuthoredValue(oldValues[key], currentValues[key])) throw new ChatgptSceneConflictError("変更するEntity・設定・Prefabが制作中に編集されました。編集内容を保ち、現在のSceneから制作を続けます");
+    if (!equalAuthoredValue(oldValues[key], currentValues[key])) throw new ChatgptSceneConflictError("変更対象のEntity・設定・プレハブが制作中に編集されたため、編集内容を保ち、現在のSceneから制作を続けます");
     if (key in newValues) merged[key] = newValues[key];
     else delete merged[key];
   }
@@ -24,7 +24,7 @@ function mergeRootEntityIds(before: string[], next: string[], latest: string[]):
     const removed = new Set(before.filter(id => !next.includes(id)));
     return [...latest.filter(id => !removed.has(id)), ...next.filter(id => !before.includes(id) && !latest.includes(id))];
   }
-  throw new ChatgptSceneConflictError("Entityの階層が制作中に編集されました。編集内容を保ち、現在のSceneから制作を続けます");
+  throw new ChatgptSceneConflictError("Entityの階層が制作中に編集されたため、編集内容を保ち、現在のSceneから制作を続けます");
 }
 
 /** Merge separate author edits; conflicts on the same authored data need a fresh plan. */
@@ -32,7 +32,7 @@ export function rebaseChatgptStep(before: XriftMcpEditorContext["bundle"], next:
   if (before === latest) return next;
   const changedScene = next.scene !== before.scene;
   if (before.project.projectId !== latest.project.projectId || before.scene.sceneId !== latest.scene.sceneId) {
-    throw new Error("反映中に作品が編集されました。編集内容を保ち、依頼の反映を停止しました");
+    throw new Error("反映中に別の作品やSceneへ切り替わったため、編集内容を保ち、依頼の反映を停止しました");
   }
   let scene = latest.scene;
   if (changedScene) {

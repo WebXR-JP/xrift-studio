@@ -731,7 +731,7 @@ function enhanceClassicProjectVisualDiagnostic(
       ...diagnostic,
       severity: "info",
       code: "classic-component-scale-recovered",
-      message: `${usageMaterial.componentName}.scaleの定数参照を${usageMaterial.componentScale}としてComponent境界へ復元します。`,
+      message: `${usageMaterial.componentName}.scaleの定数参照を${usageMaterial.componentScale}としてComponentのルートEntityへ反映します。`,
     };
   }
   const boundaryMaterial = source.inspection.customMaterials.find(
@@ -761,8 +761,8 @@ function enhanceClassicProjectVisualDiagnostic(
     severity: "info",
     code: "classic-component-transform-recovered",
     message: diagnostic.message.startsWith("group.position")
-      ? `group.positionは${boundaryMaterial.componentName}のComponent境界へ[${position}]として復元します。`
-      : `group.scaleは${boundaryMaterial.componentName}のComponent境界へ${boundaryMaterial.componentScale}として復元します。`,
+      ? `group.positionは${boundaryMaterial.componentName}のルートEntityへ[${position}]として反映します。`
+      : `group.scaleは${boundaryMaterial.componentName}のルートEntityへ${boundaryMaterial.componentScale}として反映します。`,
   };
 }
 
@@ -905,7 +905,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
         diagnostics.push({
           severity: "warning",
           code: "classic-shader-texture-missing",
-          message: `${name}に必要な${uniform.sourcePath}をCustomマテリアルへ接続できませんでした。`,
+          message: `${name}に必要な${uniform.sourcePath}をカスタムシェーダーのマテリアルへ接続できませんでした。`,
           sourcePath: materialInspection.sourceModulePath,
         });
         continue;
@@ -1951,7 +1951,7 @@ async function readClassicModelCompanions(
 
 function decodeDataUrl(dataUrl: string): { bytes: Uint8Array; mimeType: string } {
   const separator = dataUrl.indexOf(",");
-  if (separator < 0) throw new Error("data URLが壊れています。 ");
+  if (separator < 0) throw new Error("data URLが壊れています。");
   const header = dataUrl.slice(0, separator);
   const mimeType = header.match(/^data:([^;,]+)/i)?.[1] ?? "application/octet-stream";
   const payload = dataUrl.slice(separator + 1);

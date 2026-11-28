@@ -61,7 +61,7 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
     </div>
     <div ref={body} className="embedded-guide-body">
       <h1 id={`embedded-guide-${headingSlug(page.title)}`} ref={title} tabIndex={-1}>{page.title}</h1>
-      <p className="embedded-guide-note">編集画面を操作しながら読めます。本文はv{GUIDE_MANIFEST.reviewedVersion}で確認しました。確認日 {GUIDE_MANIFEST.reviewedOn}</p>
+      <p className="embedded-guide-note">編集画面を操作しながら読めます（v{GUIDE_MANIFEST.reviewedVersion}時点の内容／確認日 {GUIDE_MANIFEST.reviewedOn}）。</p>
       {!text && !error && <p role="status">本文を読み込んでいます…</p>}
       {error && <div role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)}>もう一度読み込む</button></div>}
       {linkError && <p role="alert">{linkError}</p>}
@@ -77,17 +77,17 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
           a: ({href,children}) => {
             const target=resolveGuideLink(href ?? "",page.slug,GUIDE_MANIFEST);
             if(target.kind === "invalid" || target.kind === "empty")return <span>{children}</span>;
-            if(target.kind === "video") return <a href={new URL(target.href, GUIDE_MANIFEST.siteUrl).href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(new URL(target.href, GUIDE_MANIFEST.siteUrl).href).catch(() => setLinkError("動画を開けませんでした。ネットワーク接続を確認してください。"));}}}>{children}（ブラウザーで開く・通信が必要です）</a>;
-            if(target.kind === "external") return <a href={target.href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(target.href).catch(() => setLinkError("ブラウザーでリンクを開けませんでした。接続や設定を確認してください。"));}}}>{children}</a>;
+            if(target.kind === "video") return <a href={new URL(target.href, GUIDE_MANIFEST.siteUrl).href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(new URL(target.href, GUIDE_MANIFEST.siteUrl).href).catch(() => setLinkError("動画を開けませんでした。ネットワーク接続を確認してください。"));}}}>{children}（ブラウザで開く・通信が必要です）</a>;
+            if(target.kind === "external") return <a href={target.href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(target.href).catch(() => setLinkError("ブラウザでリンクを開けませんでした。ネットワーク接続や設定を確認してください。"));}}}>{children}</a>;
             return <a href={target.href} onClick={(event) => {event.preventDefault();if(target.kind === "page")navigate(target.slug!,target.fragment);else if(target.kind === "heading")setRoute({...route,fragment:target.href.slice(1)});}}>{children}</a>;
           },
-          img: ({src,alt,title}) => {const url=media[`/docs/guide/${(src ?? "").replace(/^\.\//,"")}`];const framing=guideImageFraming(title);return url ? <span style={framing.frame}><img src={url} alt={alt} style={framing.image} loading="lazy" /></span> : <span>画像はブラウザー版で確認してください。</span>;},
+          img: ({src,alt,title}) => {const url=media[`/docs/guide/${(src ?? "").replace(/^\.\//,"")}`];const framing=guideImageFraming(title);return url ? <span style={framing.frame}><img src={url} alt={alt} style={framing.image} loading="lazy" /></span> : <span>画像はブラウザ版のガイドで確認してください。</span>;},
           table: ({children}) => <div className="embedded-guide-table" tabIndex={0} role="region" aria-label="表。横にスクロールできます"><table>{children}</table></div>,
         }}>{text}</ReactMarkdown></article>
         {page.next && <button type="button" className="embedded-guide-next" onClick={() => navigate(page.next!)}>次へ：{guidePage(page.next).title} →</button>}
         {!!page.related.length && <section className="embedded-guide-related"><h2>関連する使い方</h2>{page.related.map((slug) => <button key={slug} type="button" onClick={() => navigate(slug)}>{guidePage(slug).title} →</button>)}</section>}
       </>}
     </div>
-    <footer className="embedded-guide-bottom"><GuideExternalLink page={page.slug} label="ブラウザーで大きく読む" /><span>本文の閲覧にログインは不要です。</span></footer>
+    <footer className="embedded-guide-bottom"><GuideExternalLink page={page.slug} label="ブラウザで大きく読む" /><span>ログインなしで読めます。</span></footer>
   </aside>;
 }

@@ -10,7 +10,7 @@ const authored = (value: unknown) => JSON.stringify(value, (_key, item) =>
 export function assertBlenderModelSourceCurrent(bundle: PrototypeVisualProject, entityId: string, modelAssetId: string) {
   const model = bundle.assets.assets[modelAssetId];
   if (model?.kind !== "model" || !model.authoring) return;
-  const message = "モデル内部やMaterialに手動編集があります。その編集を保つため形状の再制作を停止しました。元の版へ戻すか、変更対象を確認してください";
+  const message = "モデル内部やMaterialに手動編集があるため、編集内容を残して形状の再制作を停止しました。元に戻すか、変更対象を確認してください";
   for (const slot of model.materialSlots) {
     const material = slot.defaultMaterialAssetId ? bundle.assets.assets[slot.defaultMaterialAssetId] : undefined;
     if (material?.kind !== "material" || !material.importedFromModel || material.importedFromModel.modelAssetId !== model.id

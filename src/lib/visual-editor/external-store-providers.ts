@@ -69,7 +69,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     catalogKinds: ["texture"],
     installableKinds: ["texture"],
     authorFallback: "XRift Studio contributors / AI生成",
-    attributionNote: "AIで生成した透過PNGです。MIT。元のPNGと透過設定済みMaterialをAssetsへ追加します。",
+    attributionNote: "AIで生成した透過PNGです（MITライセンス）。元のPNGと透過設定済みマテリアルをAssetsへ追加します。",
   },
   {
     id: "shared-material-library",
@@ -82,7 +82,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     catalogKinds: ["model", "texture"],
     installableKinds: ["model", "texture"],
     authorFallback: "未指定",
-    attributionNote: "利用条件は素材ごとに確認してください。ライセンス未指定は利用・再配布の許諾を意味しません。PNGはTextureとして追加します。",
+    attributionNote: "利用条件は素材ごとに確認してください。ライセンス未指定は利用・再配布の許諾を意味しません。PNGはテクスチャとして追加します。",
   },
   {
     id: "poly-haven",
@@ -220,7 +220,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "既存のPrimitive、パーティクル、ライト、音、Node Graphを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
+      "基本形状、パーティクル、ライト、音声、Node Graphを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
     id: "open-brush",

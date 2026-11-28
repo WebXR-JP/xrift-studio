@@ -445,7 +445,7 @@ function analyzeComponentSources(input: {
     return emptyImportPlan({
       severity: "error",
       code: "entry-module-missing",
-      message: `${normalizedEntryFile}を元データmodule一覧から読み取れませんでした。`,
+      message: `${normalizedEntryFile}をソースモジュール一覧から読み取れませんでした。`,
       sourcePath: normalizedEntryFile,
     });
   }
@@ -1035,7 +1035,7 @@ function convertJsxNode(
     };
     if (supported[binding.imported]) diagnoseNativeAttributes(node, new Set(supported[binding.imported]), diagnostics);
   }
-  for (const field of ["castShadow", "receiveShadow"]) if (attributes[field] !== undefined && typeof attributes[field] !== "boolean") unsupportedImportValue(node, diagnostics, field, "booleanで指定してください");
+  for (const field of ["castShadow", "receiveShadow"]) if (attributes[field] !== undefined && typeof attributes[field] !== "boolean") unsupportedImportValue(node, diagnostics, field, "trueまたはfalseで指定してください");
 
   if (node.name === "Fragment" || node.name === "React.Fragment") {
     return visitChildren(node, context, bindings, projectKind, output, diagnostics);
@@ -1085,7 +1085,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "rigid-body-children-missing",
-        message: "RigidBodyに変換可能な子要素がありません。構造だけを保持します。",
+        message: "RigidBodyに変換できる子要素がありません。階層構造だけを取り込みます。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1109,7 +1109,7 @@ function convertJsxNode(
         severity: "warning",
         code: "rapier-cuboid-collider-dynamic",
         message:
-          "CuboidColliderのargs/positionを静的に確定できないため、誤ったColliderを作らず構造だけ保持します。",
+          "CuboidColliderのargsやpositionを静的に確定できないため、誤ったColliderを作らず階層構造だけを取り込みます。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1183,7 +1183,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "unknown-xrift-export",
-        message: `${binding.imported}はStudioの公式Component Registryに未登録です。`,
+        message: `${binding.imported}はXRift Studioで対応している公式Componentではありません。`,
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1240,7 +1240,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "wrapper-children-missing",
-        message: `${definition.importName}の子要素を変換できなかったため、ComponentEntityだけを保持します。`,
+        message: `${definition.importName}の子要素を変換できなかったため、Component本体だけを取り込みます。`,
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1279,7 +1279,7 @@ function convertJsxNode(
         diagnostics.push({
           severity: "warning",
           code: "gltf-source-missing",
-          message: "Drei Gltfの参照先を静的に特定できないため、Component境界だけを保持します。",
+          message: "Drei Gltfの参照先を静的に特定できないため、外枠のEntityだけを取り込みます。",
           line: node.line,
           sourcePath: context.sourcePath,
         });
@@ -1365,7 +1365,7 @@ function convertJsxNode(
       return output.length - before;
     }
     if (binding.imported === "Reflector") {
-      if (node.children.length) unsupportedImportValue(node, diagnostics, "children", "Reflectorの子要素は保持できません。共通のgroupへ配置してください");
+      if (node.children.length) unsupportedImportValue(node, diagnostics, "children", "Reflectorの子要素は取り込めません。共通のgroupへ配置してください");
       const definition = getXriftComponentDefinition("Mirror");
       if (!definition) return 0;
       const args = asNumberArray(attributes.args);
@@ -1409,7 +1409,7 @@ function convertJsxNode(
       return 1;
     }
     if (binding.imported === "Sky" || binding.imported === "Environment") {
-      if (node.children.length) unsupportedImportValue(node, diagnostics, "children", "空の子要素は保持できません。共通のgroupへ配置してください");
+      if (node.children.length) unsupportedImportValue(node, diagnostics, "children", `${binding.imported}の子要素は取り込めません。共通のgroupへ配置してください`);
       const definition = getXriftComponentDefinition("Skybox");
       if (!definition) return 0;
       appendImportNode(output, context, {
@@ -1455,7 +1455,7 @@ function convertJsxNode(
     diagnostics.push({
       severity: "warning",
       code: "unsupported-drei-component",
-      message: `Drei ${binding.imported}は見た目を変換できないため、Component境界と変換できる子要素を保持します。`,
+      message: `Drei ${binding.imported}は見た目を変換できないため、外枠のEntityと変換できる子要素だけを取り込みます。`,
       line: node.line,
       sourcePath: context.sourcePath,
     });
@@ -1522,7 +1522,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "unsupported-mesh-geometry",
-        message: "メッシュ内に対応する標準Geometryがないため、メッシュEntityと子構造だけを保持します。",
+        message: "メッシュ内に対応する基本形状がないため、メッシュのEntityと子階層だけを取り込みます。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1537,7 +1537,7 @@ function convertJsxNode(
     }
     const geometryAttributes = attributesToObject(geometry, diagnostics);
     diagnoseNativeAttributes(geometry, new Set(["args", "attach"]), diagnostics);
-    if (geometryAttributes.attach !== undefined && geometryAttributes.attach !== "geometry") unsupportedImportValue(geometry, diagnostics, "attach", "geometry以外へのattachは保持できません");
+    if (geometryAttributes.attach !== undefined && geometryAttributes.attach !== "geometry") unsupportedImportValue(geometry, diagnostics, "attach", "geometry以外へのattachは取り込めません");
     return appendPrimitiveAndChildren(primitiveNodeFromJsx(
         node,
         GEOMETRY_PRIMITIVES[geometry.name],
@@ -1593,7 +1593,7 @@ function convertJsxNode(
     diagnostics.push({
       severity: "warning",
       code: "unsupported-react-component",
-      message: `${node.name}の実装は変換できないため、Component境界と変換できる子要素を保持します。`,
+      message: `${node.name}の実装は変換できないため、外枠のEntityと変換できる子要素だけを取り込みます。`,
       line: node.line,
       sourcePath: context.sourcePath,
     });
@@ -1671,7 +1671,7 @@ function appendPrimitiveAndChildren(
   const before = output.length;
   const declarations = node.children.filter(child => GEOMETRY_PRIMITIVES[child.name] || child.name === "extrudeGeometry" || /Material$/.test(child.name));
   if (declarations.filter(child => !/Material$/.test(child.name)).length > 1 || declarations.filter(child => /Material$/.test(child.name)).length > 1) {
-    unsupportedImportValue(node, diagnostics, "children", "複数のGeometryやMaterialは保持できません。Meshを分けてください");
+    unsupportedImportValue(node, diagnostics, "children", "複数のGeometryやMaterialは取り込めません。Meshを分けてください");
   }
   if (node.children.length === declarations.length) { appendImportNode(output, context, built); return 1; }
   const transform = transformFromProps(attributes);
@@ -1701,7 +1701,7 @@ function extrudeNodeFromJsx(
   if (argsNode !== node) {
     diagnoseNativeAttributes(argsNode, new Set(["args", "attach"]), diagnostics);
     const attach = argsNode.attributes.find(attribute => attribute.name === "attach");
-    if (attach && attach.value !== "geometry") unsupportedImportValue(argsNode, diagnostics, "attach", "geometry以外へのattachは保持できません");
+    if (attach && attach.value !== "geometry") unsupportedImportValue(argsNode, diagnostics, "attach", "geometry以外へのattachは取り込めません");
   }
   const argsAttribute = argsNode.attributes.find(
     (attribute) => attribute.name === "args",
@@ -1723,7 +1723,7 @@ function extrudeNodeFromJsx(
       severity: "warning",
       code: "extrude-shape-unresolved",
       message:
-        "押し出し形状の輪郭や深さを静的に確定できないため、メッシュEntityと子構造だけを保持します。THREE.ShapeのmoveTo/lineToとリテラルの深さで書くと変換できます。",
+        "押し出し形状の輪郭や深さを静的に確定できないため、メッシュのEntityと子階層だけを取り込みます。THREE.ShapeのmoveTo/lineToとリテラルの深さで書くと変換できます。",
       line: node.line,
       sourcePath: context.sourcePath,
     });
@@ -1747,7 +1747,7 @@ function extrudeNodeFromJsx(
   diagnostics.push({
     severity: "info",
     code: "extrude-geometry-converted",
-    message: "押し出し形状を編集可能な押し出しMeshへ変換します。",
+    message: "押し出し形状を編集可能な押し出しメッシュへ変換します。",
     line: node.line,
     sourcePath: context.sourcePath,
   });
@@ -1793,10 +1793,10 @@ function primitiveNodeFromJsx(
   const unlit = materialNode?.name === "meshBasicMaterial";
   if (materialNode) {
     diagnoseNativeAttributes(materialNode, new Set(["color", "side", "attach", ...(unlit ? [] : ["metalness", "roughness"])]), diagnostics);
-    if (materialProps.attach !== undefined && materialProps.attach !== "material") unsupportedImportValue(materialNode, diagnostics, "attach", "material以外へのattachは保持できません");
+    if (materialProps.attach !== undefined && materialProps.attach !== "material") unsupportedImportValue(materialNode, diagnostics, "attach", "material以外へのattachは取り込めません");
     if (materialProps.color !== undefined && (!color || typeof materialProps.color === "number" && (materialProps.color < 0 || materialProps.color > 0xffffff))) unsupportedImportValue(materialNode, diagnostics, "color", "色は#rrggbb、#rgb、または0〜0xffffffの数値で指定してください");
     for (const field of ["roughness", "metalness"] as const) if (materialProps[field] !== undefined && (typeof materialProps[field] !== "number" || materialProps[field] < 0 || materialProps[field] > 1)) unsupportedImportValue(materialNode, diagnostics, field, "0〜1の有限な値で指定してください");
-    if (materialProps.side !== undefined && ![0, 2, "FrontSide", "DoubleSide"].includes(materialProps.side as string | number)) unsupportedImportValue(materialNode, diagnostics, "side", "FrontSideまたはDoubleSideだけを保持できます");
+    if (materialProps.side !== undefined && ![0, 2, "FrontSide", "DoubleSide"].includes(materialProps.side as string | number)) unsupportedImportValue(materialNode, diagnostics, "side", "FrontSideまたはDoubleSideだけに対応しています");
   }
   const textureSourcePath =
     assetSourcePathFromJsx(
@@ -1848,7 +1848,7 @@ function unsupportedImportValue(node: ParsedJsxNode, diagnostics: ComponentCodeI
 }
 
 function diagnoseNativeAttributes(node: ParsedJsxNode, supported: ReadonlySet<string>, diagnostics: ComponentCodeImportDiagnostic[]): void {
-  for (const attribute of node.attributes) if (!supported.has(attribute.name)) unsupportedImportValue(node, diagnostics, attribute.name, "この属性はSceneへ保持できません。対応する属性だけを指定してください。", "unsupported-native-prop");
+  for (const attribute of node.attributes) if (!supported.has(attribute.name)) unsupportedImportValue(node, diagnostics, attribute.name, "この属性はシーンへ取り込めません。対応する属性だけを指定してください。", "unsupported-native-prop");
 }
 
 function diagnoseTransform(values: JsonObject, node: ParsedJsxNode, diagnostics: ComponentCodeImportDiagnostic[]): void {
@@ -1877,7 +1877,7 @@ function diagnoseGeometryArgs(creationId: string, value: JsonValue | undefined, 
     const dimension = args[index] ?? 1;
     if (typeof dimension !== "number" || !Number.isFinite(dimension) || dimension <= 0 || dimension > 1000) unsupportedImportValue(node, diagnostics, `args[${index}]`, "寸法は0より大きく1000以下の有限な値で指定してください。", "unsupported-geometry-args");
   }
-  if (kind === "Cylinder" && (args[0] ?? 1) !== (args[1] ?? 1)) unsupportedImportValue(node, diagnostics, "args", "Cylinderの上下の半径は同じ値だけを保持できます。円すいはConeを使ってください。", "unsupported-geometry-args");
+  if (kind === "Cylinder" && (args[0] ?? 1) !== (args[1] ?? 1)) unsupportedImportValue(node, diagnostics, "args", "Cylinderの上下の半径は同じ値だけに対応しています。円すいにはConeを使ってください。", "unsupported-geometry-args");
   const topology: Record<string, JsonValue[]> = {
     Box: [1,1,1], Sphere: [32,20,0,Math.PI * 2,0,Math.PI],
     Cylinder: [32,1,false,0,Math.PI * 2], Cone: [32,1,false,0,Math.PI * 2], Plane: [1,1],
@@ -1886,7 +1886,7 @@ function diagnoseGeometryArgs(creationId: string, value: JsonValue | undefined, 
   for (let index = dimensions; index < args.length; index++) {
     const next = expected[index - dimensions];
     if (next === undefined || typeof next === "number" && (typeof args[index] !== "number" || Math.abs((args[index] as number) - next) > 1e-9) || typeof next !== "number" && args[index] !== next) {
-      unsupportedImportValue(node, diagnostics, `args[${index}]`, `分割・開口・角度はStudioの固定形状だけを保持できます（${kind}: ${JSON.stringify(expected)}）。`, "unsupported-geometry-args");
+      unsupportedImportValue(node, diagnostics, `args[${index}]`, `分割・開口・角度はStudioの既定形状だけに対応しています（${kind}: ${JSON.stringify(expected)}）。`, "unsupported-geometry-args");
     }
   }
 }
@@ -1913,7 +1913,7 @@ function convertLocalComponent(
   diagnostics: ComponentCodeImportDiagnostic[],
 ): number {
   const before = output.length;
-  if (node.children.length) unsupportedImportValue(node, diagnostics, "children", "ローカルComponentへのJSX childrenは保持できません。子要素をComponent内で構成するか、外側のgroupへ配置してください");
+  if (node.children.length) unsupportedImportValue(node, diagnostics, "children", "ローカルComponentへのJSX childrenは取り込めません。子要素をComponent内で構成するか、外側のgroupへ配置してください");
   const targetPath = binding?.module.startsWith(".")
     ? resolveLocalModulePath(
         context.sourcePath,
@@ -1940,7 +1940,7 @@ function convertLocalComponent(
     diagnostics.push({
       severity: "warning",
       code: "local-module-missing",
-      message: `${node.name}のローカルモジュールを読み取れないため、Component境界だけを保持します。`,
+      message: `${node.name}のローカルモジュールを読み取れないため、外枠のEntityだけを取り込みます。`,
       line: node.line,
       sourcePath: context.sourcePath,
     });
@@ -1950,7 +1950,7 @@ function convertLocalComponent(
       diagnostics.push({
         severity: "warning",
         code: "local-component-cycle",
-        message: `${node.name}の循環参照を検出したため、Component境界で展開を止めました。`,
+        message: `${node.name}の循環参照を検出したため、このComponentの展開を止めました。`,
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1958,7 +1958,7 @@ function convertLocalComponent(
       diagnostics.push({
         severity: "warning",
         code: "local-component-depth",
-        message: `${node.name}の展開が深すぎるため、Component境界で停止しました。`,
+        message: `${node.name}の展開が深すぎるため、このComponentで展開を止めました。`,
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1982,7 +1982,7 @@ function convertLocalComponent(
         diagnostics.push({
           severity: "warning",
           code: "local-component-jsx-missing",
-          message: `${node.name}のreturn JSXを静的に見つけられないため、Component境界だけを保持します。`,
+          message: `${node.name}のreturn JSXを静的に見つけられないため、外枠のEntityだけを取り込みます。`,
           line: node.line,
           sourcePath: targetPath,
         });
@@ -2163,7 +2163,7 @@ function extractComponentJsxRoots(
 }
 
 function diagnoseUnresolvedCollections(source: string, diagnostics: ComponentCodeImportDiagnostic[], sourcePath: string): void {
-  if (/\.map\s*\(|\bArray\.from\s*\(/.test(source)) diagnostics.push({ severity: "warning", code: "static-collection-unresolved", message: "繰り返しの件数や値を静的に確定できません。未展開のtemplateが残っています。", sourcePath });
+  if (/\.map\s*\(|\bArray\.from\s*\(/.test(source)) diagnostics.push({ severity: "warning", code: "static-collection-unresolved", message: "繰り返しの件数や値を静的に確定できません。未展開のテンプレートが残っています。", sourcePath });
   if (/\{[^{}]*(?:\?|&&|\|\|)[^{}]*</.test(source)) diagnostics.push({ severity: "warning", code: "conditional-jsx-unsupported", message: "JSXの条件分岐は静的変換の対象外です。必要な要素を明示してください。", sourcePath });
 }
 
@@ -2284,7 +2284,7 @@ function rigidBodyFromJsx(
     diagnostics.push({
       severity: "warning",
       code: "rapier-auto-collider-unsupported",
-      message: `Rapier colliders=${sourceAutoColliders}は未対応のためcuboidとして保持します。`,
+      message: `Rapierのcolliders=${sourceAutoColliders}は未対応のためcuboidとして取り込みます。`,
       line: node.line,
     });
   }

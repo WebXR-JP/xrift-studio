@@ -169,7 +169,7 @@ export function assertMcpExternalStoreWrite(
   if (expectedRevision !== context.revision) {
     throw new XriftMcpEditorToolError(
       "STALE_REVISION",
-      "シーンが更新されています。最新のEditor contextを取得してください",
+      "シーンが更新されています。get_editor_contextで最新の状態を取得してください",
       { expectedRevision, currentRevision: context.revision },
     );
   }

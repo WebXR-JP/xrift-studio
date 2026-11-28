@@ -62,7 +62,7 @@ export function compileXriftComponent(
       diagnostic(
         source,
         "unknown-xrift-component",
-        `未対応のXRiftのComponent schemaです: ${component.schemaId}`,
+        `未対応のXRift Component定義です: ${component.schemaId}`,
         { fieldPath: "schemaId" },
       ),
     ]);
@@ -127,7 +127,7 @@ export function compileXriftComponent(
       ...source,
       severity: "warning",
       code: "ignored-xrift-component-prop",
-      message: `${definition.importName}.${name}は公式authoring registryに未登録のため出力しません`,
+      message: `${definition.importName}.${name}は公式の対応項目に含まれていないため出力しません`,
       fieldPath: `properties.${name}`,
     });
   }
@@ -138,7 +138,7 @@ export function compileXriftComponent(
         diagnostic(
           source,
           "required-runtime-binding-unsupported",
-          `${definition.importName}.${binding.name}の安全な生成adapterがありません`,
+          `${definition.importName}.${binding.name}のコード生成に対応していません`,
         ),
       );
     }

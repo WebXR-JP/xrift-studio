@@ -207,7 +207,7 @@ export function useClassicShaderTextures(
       // time for no change, so both are only replaced when they differ.
       setTextures(NO_CLASSIC_SHADER_TEXTURES);
       const state: SceneReviewLoadState = hasTextures
-        ? { status: "error", message: "Shaderの画像の参照元を読み込めず、見た目を確認できませんでした" }
+        ? { status: "error", message: "シェーダーの画像の参照元を読み込めず、見た目を確認できませんでした" }
         : { status: "ready" };
       setReadiness((current) =>
         current.key === signature && contentEqual(current.state, state, 1)
@@ -229,12 +229,12 @@ export function useClassicShaderTextures(
       .then((entries) => {
         if (!active) return;
         setTextures(Object.fromEntries(entries));
-        setReadiness({ key: signature, state: entries.length === assetIds.length ? { status: "ready" } : { status: "error", message: "Shaderの画像が不足し、見た目を確認できませんでした" } });
+        setReadiness({ key: signature, state: entries.length === assetIds.length ? { status: "ready" } : { status: "error", message: "シェーダーの画像が不足し、見た目を確認できませんでした" } });
       })
       .catch(() => {
         if (!active) return;
         setTextures(NO_CLASSIC_SHADER_TEXTURES);
-        setReadiness({ key: signature, state: { status: "error", message: "Shaderの画像を読み込めず、見た目を確認できませんでした" } });
+        setReadiness({ key: signature, state: { status: "error", message: "シェーダーの画像を読み込めず、見た目を確認できませんでした" } });
       });
     return () => {
       active = false;

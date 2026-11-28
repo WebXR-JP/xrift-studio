@@ -50,7 +50,7 @@ fn journal_path(project_path: &str, scene_id: &str) -> Result<PathBuf, String> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
-        return Err("Scene IDが不正です。".into());
+        return Err("シーンIDが不正です。".into());
     }
     let root = canonical_project_root(project_path)?;
     if !root.join(VISUAL_PROJECT_MANIFEST).is_file() {
@@ -156,7 +156,7 @@ fn authoring_progress_valid(progress: &serde_json::Value, writes: u64) -> bool {
 /// The frontend owns Scene comparisons; the journal boundary still rejects
 /// malformed budgets, counters and completion claims before writing to disk.
 fn validate_authoring_state(state: &serde_json::Value) -> Result<(), String> {
-    let invalid = || "制作状態の形式または完了証跡を確認してください。".to_string();
+    let invalid = || "制作状態の形式または完了の記録を確認してください。".to_string();
     if state["version"] != 1 || !authoring_count(&state["sequence"]) || !authoring_text(&state["blueprint"], 20_000)
         || !authoring_text(&state["activity"]["tool"], 128) || !authoring_text(&state["activity"]["at"], 64)
         || !authoring_text(&state["activity"]["fingerprint"], 256) { return Err(invalid()); }
@@ -261,11 +261,11 @@ pub fn read_world_authoring_images(
         }
         let path = path.canonicalize().map_err(|e| e.to_string())?;
         if !path.starts_with(&root) {
-            return Err("画像がStudioの保存先の外にあります。".into());
+            return Err("画像がXRift Studioの保存先の外にあります。".into());
         }
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         if !bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]) {
-            return Err("画像がPNGではありません。".into());
+            return Err("画像がPNG形式ではありません。".into());
         }
         images.push(serde_json::json!({"view": view, "captureId": capture["id"], "mimeType": "image/png", "data": base64::engine::general_purpose::STANDARD.encode(bytes)}));
     }
@@ -295,22 +295,22 @@ pub fn save_world_authoring(
             return Err("同じ制作の上限と累積回数はリセットできません。".into());
         }
         if let Some(progress) = previous["run"].get("progress") {
-            let next = state["run"].get("progress").ok_or("同じ制作の進展記録は削除できません。")?;
-            let old_observations = progress["observations"].as_array().ok_or("制作の進展記録を確認してください。")?;
-            let next_observations = next["observations"].as_array().ok_or("制作の進展記録を確認してください。")?;
+            let next = state["run"].get("progress").ok_or("同じ制作の進捗記録は削除できません。")?;
+            let old_observations = progress["observations"].as_array().ok_or("制作の進捗記録を確認してください。")?;
+            let next_observations = next["observations"].as_array().ok_or("制作の進捗記録を確認してください。")?;
             if let Some(old_last) = old_observations.last() {
-                let old_pass = old_last["pass"].as_u64().ok_or("制作の進展記録を確認してください。")?;
+                let old_pass = old_last["pass"].as_u64().ok_or("制作の進捗記録を確認してください。")?;
                 let next_pass = next_observations.last().and_then(|entry| entry["pass"].as_u64()).unwrap_or(0);
                 if next_pass < old_pass || next_pass == old_pass && next != progress
                     || next_pass > old_pass && next_observations.iter().find(|entry| entry["pass"].as_u64() == Some(old_pass)).is_some_and(|entry| entry != old_last) {
-                    return Err("同じ制作の進展記録は巻き戻せません。".into());
+                    return Err("同じ制作の進捗記録は巻き戻せません。".into());
                 }
             }
         }
     }
     let mut bytes = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
     if bytes.len() > 1024 * 1024 {
-        return Err("制作状態が大きすぎます。".into());
+        return Err("制作状態のデータが大きすぎます。".into());
     }
     bytes.push(b'\n');
     ignore_generated_directory(

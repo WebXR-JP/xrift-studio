@@ -217,7 +217,7 @@ export function useScriptRuntime({
         assetId,
         assetName: currentAssets.assets[assetId]?.name ?? assetId,
         relativePath: "",
-        message: "プロジェクトのpathが未確定のためスクリプトを読み込めません",
+        message: "プロジェクトの保存先パスが未確定のため、スクリプトを読み込めません",
       }));
       if (compileGenerationRef.current === generation) {
         setState((previous) => ({ ...previous, status: "error", errors }));

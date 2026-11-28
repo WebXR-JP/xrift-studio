@@ -320,7 +320,7 @@ export function SceneRecipeStore({
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
               <p className="font-semibold text-slate-800">中身</p>
               <ul className="mt-1 space-y-0.5">
-                {selected.assembly ? <li>乗車・走行・タイヤ・煙の設定済みScript</li> : null}
+                {selected.assembly ? <li>乗車・走行・タイヤ・煙の設定済みスクリプト</li> : null}
                 {contents.primitive > 0 ? (
                   <li>形状 {contents.primitive} 個</li>
                 ) : null}

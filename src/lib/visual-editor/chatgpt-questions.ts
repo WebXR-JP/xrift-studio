@@ -18,8 +18,8 @@ export function parseChatgptQuestions(raw: unknown): ChatgptQuestion[] {
     if (Object.keys(question).some(key => !["question", "choices", "choiceCandidateIds"].includes(key)) || typeof question.question !== "string" || !question.question.trim() || question.question.length > 240
       || !Array.isArray(question.choices) || question.choices.length < 3 || question.choices.length > CHATGPT_MAX_VISUAL_CHOICES || question.choices.some(choice => typeof choice !== "string" || !choice.trim() || choice.length > 160) || new Set(question.choices.map(choice => typeof choice === "string" ? choice.trim() : choice)).size !== question.choices.length) throw new Error("確認事項を読み取れませんでした");
     const candidates = question.choiceCandidateIds;
-    if (candidates != null && (!Array.isArray(candidates) || candidates.length !== question.choices.length || candidates.some(id => id !== null && (typeof id !== "string" || !id.trim() || id.length > 320)) || new Set(candidates.filter(id => id !== null)).size !== candidates.filter(id => id !== null).length)) throw new Error("確認事項の素材を読み取れませんでした");
-    if (question.choices.length > 3 && (!Array.isArray(candidates) || candidates.some(id => id === null))) throw new Error("確認事項の素材を読み取れませんでした");
+    if (candidates != null && (!Array.isArray(candidates) || candidates.length !== question.choices.length || candidates.some(id => id !== null && (typeof id !== "string" || !id.trim() || id.length > 320)) || new Set(candidates.filter(id => id !== null)).size !== candidates.filter(id => id !== null).length)) throw new Error("確認事項の素材情報を読み取れませんでした");
+    if (question.choices.length > 3 && (!Array.isArray(candidates) || candidates.some(id => id === null))) throw new Error("確認事項の素材情報を読み取れませんでした");
     return { question: question.question.trim(), choices: question.choices.map(choice => String(choice).trim()), ...(Array.isArray(candidates) ? { choiceCandidateIds: candidates as (string | null)[] } : {}) };
   });
 }

@@ -143,7 +143,7 @@ export async function loadScriptModule(
     return {
       ok: false,
       message:
-        "動的import(...)は使用できません。許可されたmoduleを静的importしてください。",
+        "動的インポート（import(...)）は使用できません。許可されたモジュールを静的にインポートしてください。",
     };
   }
 
@@ -211,7 +211,7 @@ async function transpileScriptModuleCached(
       message:
         error instanceof Error
           ? error.message
-          : "TypeScript compilerを読み込めませんでした",
+          : "TypeScriptコンパイラを読み込めませんでした",
     };
   }
   const transpiled = await compile(source, fileName);
@@ -269,12 +269,12 @@ function describeRejection(
   reason: ScriptSpecifierRejection,
 ): string {
   if (reason === "remote-not-allowed") {
-    return `${specifier} を読み込むにはリモートimportの許可が必要です。`;
+    return `${specifier} を読み込むにはリモートインポートの許可が必要です。`;
   }
   if (reason === "relative-not-supported") {
-    return `${specifier} はスクリプト間のimportです。まだ対応していません。`;
+    return `${specifier} はスクリプト間のインポートです。まだ対応していません。`;
   }
-  return `${specifier} は使用できないmoduleです。`;
+  return `${specifier} は使用できないモジュールです。`;
 }
 
 export function releaseScriptModuleUrl(objectUrl: string): void {

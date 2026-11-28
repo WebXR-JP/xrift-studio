@@ -213,15 +213,15 @@ export function HierarchyTransferDialog({ session, getCurrent, onCommit, onClose
         <SelectionTree key={bundle.scene.sceneId} scene={bundle.scene} selected={selected} disabled={busy} onChange={(ids) => { setSelected(ids); invalidate(); }} />
         <div className="grid gap-3 sm:grid-cols-2">
           {session.mode === "export" ? <label className="text-xs">書き出すプロジェクトの種類<select value={exportKind} disabled={busy} onChange={(event) => { setExportKind(event.target.value as "world" | "item"); invalidate(); }} className="mt-1 min-h-10 w-full rounded border px-2 text-sm"><option value="world">ワールド</option><option value="item">アイテム</option></select></label> : null}
-          {session.mode !== "export" ? <label className="text-xs">追加先<select value={parentId ?? ""} disabled={busy} onChange={(event) => { setParentId(event.target.value || null); invalidate(); }} className="mt-1 min-h-10 w-full min-w-0 rounded border px-2 text-sm"><option value="">Scene直下</option>{[...parentOptions].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label> : null}
-          <label className="text-xs">配置<select value={placement} disabled={busy} onChange={(event) => { setPlacement(event.target.value as HierarchyPlacement); invalidate(); }} className="mt-1 min-h-10 w-full rounded border px-2 text-sm"><option value="world">元のワールド座標を保つ</option><option value="origin">先頭のEntityを原点へ移す</option><option value="local">元のローカル座標を使う</option></select></label>
+          {session.mode !== "export" ? <label className="text-xs">追加先<select value={parentId ?? ""} disabled={busy} onChange={(event) => { setParentId(event.target.value || null); invalidate(); }} className="mt-1 min-h-10 w-full min-w-0 rounded border px-2 text-sm"><option value="">シーン直下</option>{[...parentOptions].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label> : null}
+          <label className="text-xs">配置<select value={placement} disabled={busy} onChange={(event) => { setPlacement(event.target.value as HierarchyPlacement); invalidate(); }} className="mt-1 min-h-10 w-full rounded border px-2 text-sm"><option value="world">元のワールド座標を維持</option><option value="origin">先頭のEntityを原点へ移す</option><option value="local">元のローカル座標を使う</option></select></label>
         </div>
-        <p className="text-xs leading-5 text-slate-500">「原点へ移す」は、Scene直下ならシーンの原点、子として追加するなら親の原点に配置します。Entity同士の位置関係は保ちます。</p>
+        <p className="text-xs leading-5 text-slate-500">「原点へ移す」を選ぶと、シーン直下ならシーンの原点、子として追加するなら親の原点に配置します。Entity同士の位置関係は維持されます。</p>
       </> : null}
       {ready ? <section className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs leading-5" aria-label="受け渡す内容">
         <p className="font-semibold">Entity {Object.keys(ready.prepared.bundle.scene.entities).length}件 / 素材 {Object.keys(ready.prepared.bundle.assets.assets).length}件 / ファイル {ready.prepared.files.size}件</p>
         {warnings.length ? <div><p className="font-semibold">追加前に確認してください</p><ul className="max-h-40 list-disc space-y-1 overflow-auto pl-5">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : <p>参照切れの警告はありません。</p>}
-        <p>Scriptは自動実行しません。Playで実行する前に内容を確認してください。</p>
+        <p>スクリプトは自動実行されません。Playで実行する前に内容を確認してください。</p>
       </section> : null}
       {error ? <p role="alert" className="whitespace-pre-wrap rounded border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800">{error}</p> : null}
       {status ? <p role="status" className="break-all text-xs leading-5 text-slate-600">{status}</p> : null}

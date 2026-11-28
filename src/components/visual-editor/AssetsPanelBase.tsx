@@ -1004,7 +1004,7 @@ function ImportActivityDrawer({
       {!projectPersisted && waitingForSave ? (
         <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
-            初回の自動保存が完了するまでお待ちください。選択したファイルは、この画面を開いている間は保持されます。
+            初回の自動保存が終わるまでお待ちください。選択したファイルは、この画面を開いている間そのまま残ります。
           </p>
           <button
             type="button"
@@ -1096,7 +1096,7 @@ function ImportQueueEntry({
       {entry.result ? (
         <p className="mt-1 text-[11px] text-editor-muted">
           {entry.resourceKind === "unity-package"
-            ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・素材 ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
+            ? `プレハブ ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・素材 ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
             : entry.resourceKind === "skybox"
               ? "HDRIテクスチャ1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"

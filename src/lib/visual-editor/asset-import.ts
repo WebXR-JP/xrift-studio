@@ -1674,7 +1674,7 @@ function validateGltfImportStructure(
     if (!Array.isArray(mesh.primitives) || mesh.primitives.length === 0) {
       issues.push({
         code: "gltf-mesh-primitives-invalid",
-        message: "メッシュには1つ以上のprimitiveが必要です",
+        message: "メッシュには1つ以上のプリミティブが必要です",
         fieldPath: `${meshPath}.primitives`,
       });
       return;
@@ -1684,7 +1684,7 @@ function validateGltfImportStructure(
       if (!isRecord(primitive)) {
         issues.push({
           code: "gltf-primitive-invalid",
-          message: "メッシュのprimitiveはオブジェクトである必要があります",
+          message: "メッシュのプリミティブはオブジェクトである必要があります",
           fieldPath: primitivePath,
         });
         return;
@@ -1698,7 +1698,7 @@ function validateGltfImportStructure(
       ) {
         issues.push({
           code: "gltf-material-index-invalid",
-          message: "メッシュのprimitiveが参照するマテリアルの番号が不正です",
+          message: "メッシュのプリミティブが参照するマテリアルの番号が不正です",
           fieldPath: `${primitivePath}.material`,
         });
       }
@@ -1711,7 +1711,7 @@ function validateGltfImportStructure(
     if (entry.name !== undefined && typeof entry.name !== "string") {
       issues.push({
         code: "gltf-animation-name-invalid",
-        message: "Animation名は文字列である必要があります",
+        message: "アニメーション名は文字列である必要があります",
         fieldPath: `${path}.name`,
       });
     }
@@ -1883,7 +1883,7 @@ export function validateGltfNodeHierarchy(
   if (maximumDepth > ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH) {
     issues.push({
       code: "gltf-node-hierarchy-too-deep",
-      message: `モデルのHierarchy深度は${ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH}以下にしてください`,
+      message: `モデルの階層の深さは${ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH}以下にしてください`,
       fieldPath: "nodes",
     });
   }

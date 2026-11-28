@@ -360,10 +360,10 @@ export function CustomMaterialPreview({
       >
         {loadState.status === "ready"
           ? runtimeInfo?.pbrFallback
-            ? "glTF PBRへフォールバック"
+            ? "glTF PBRで代替表示"
             : "three-icosaシェーダー適用済み"
           : loadState.status === "error"
-            ? "Shaderの読み込み失敗"
+            ? "シェーダーの読み込み失敗"
             : "three-icosaシェーダーを再構築中"}
       </span> : null}
 
@@ -384,7 +384,7 @@ export function CustomMaterialPreview({
         </div>
       ) : !compact ? (
         <span className="pointer-events-none absolute inset-x-2 bottom-1.5 text-center text-[9px] text-slate-300/80">
-          実ストローク形状 · ドラッグで回転 · ホイールでズーム
+          実際の筆跡形状 · ドラッグで回転 · ホイールでズーム
         </span>
       ) : null}
     </div>
@@ -435,7 +435,7 @@ function StandaloneCustomShaderPreview({
       <PreviewMessage className={className}>
         <span className="font-semibold text-slate-700">カスタムシェーダーを表示できません</span>
         <span className="mt-1 text-[11px] leading-4 text-slate-500">
-          {shaderDiagnostics[0] ?? "シェーダー materialを作成できません"}
+          {shaderDiagnostics[0] ?? "シェーダーマテリアルを作成できません"}
         </span>
       </PreviewMessage>
     );

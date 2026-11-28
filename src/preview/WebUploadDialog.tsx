@@ -217,7 +217,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   const start = async () => {
     if (running || attemptLoading || (state.phase !== "review" && state.phase !== "failed")) return;
     if (!complete) {
-      setState({ phase: "failed", message: "タイトルと説明を入力してください。「シーン設定」内の「公開情報」で編集できます。" });
+      setState({ phase: "failed", message: "タイトルと説明が未入力です。「シーン設定」の「公開情報」から入力してください。" });
       return;
     }
     const submittedToken = (token || tokenInput.current?.value || "").trim();
@@ -334,8 +334,8 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
           <p className="text-xs leading-relaxed text-zinc-600">{bundle.project.metadata.description || "説明未設定"}</p>
           <p className="break-all text-xs text-zinc-500">{state.phase === "needs-check" ? "送信結果を確認するまで、新しい送信は保留します。" : targetId ? `更新先: ${targetId}` : `新しい${contentLabel}として送信`}</p>
         </section>
-        {!complete ? <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルと説明が未入力です。閉じて「シーン設定」内の「公開情報」で編集してください。</p> : null}
-        {complete && sampleMetadata ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルまたは説明が初期値です。この内容で送信できます。作品に合わせて変える場合は「シーン設定」内の「公開情報」で編集してください。</p> : null}
+        {!complete ? <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルと説明が未入力です。一度閉じて「シーン設定」の「公開情報」から入力してください。</p> : null}
+        {complete && sampleMetadata ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルまたは説明が初期値のままです。このまま送信もできますが、作品に合わせて変更したい場合は「シーン設定」の「公開情報」から編集してください。</p> : null}
         <section className="space-y-2">
           <p className="text-xs font-semibold text-zinc-700">サムネイル</p>
           {thumbnailUrl ? <img src={thumbnailUrl} alt="公開用サムネイル" className="max-h-40 w-full rounded-lg border border-zinc-200 bg-zinc-100 object-contain" /> : <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-xs text-zinc-600">サムネイルは未設定です。このまま送信することもできます。</p>}
@@ -358,7 +358,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
             <input ref={tokenInput} id="web-upload-token" type={showToken ? "text" : "password"} value={token} onChange={(event) => { tokenEdited.current = true; setSavedKeyInUse(false); setToken(event.target.value); setCredentialMessage(null); }} placeholder="xrift_sk_..." autoComplete="current-password" spellCheck={false} disabled={running} className="min-h-11 min-w-0 flex-1 rounded-md border border-zinc-300 px-3 font-mono text-sm focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100" />
             <button type="button" onClick={() => setShowToken(!showToken)} disabled={running} aria-label={showToken ? "APIキーを隠す" : "APIキーを表示"} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-300 text-zinc-600 disabled:opacity-50">{showToken ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
-          <p className="text-xs leading-relaxed text-zinc-500">XRiftの設定画面で<code>{scope}</code>権限を付けて発行してください。XRift StudioはキーをプロジェクトやWeb Storageに保存しません。</p>
+          <p className="text-xs leading-relaxed text-zinc-500">XRiftの設定画面で<code>{scope}</code>権限を付けて発行してください。キーはプロジェクトデータやブラウザのローカル領域には保存されません。</p>
           {canSaveWithBrowser ? <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
             <p className="leading-relaxed text-zinc-600">送信が完了したら、この画面からブラウザのパスワード管理機能へキーを保存できます。保存と端末間の同期はブラウザの設定に従います。</p>
             {!token ? <button type="button" onClick={() => void chooseSavedKey()} disabled={running} className="font-medium text-brand-600 underline underline-offset-2 disabled:opacity-50">保存済みキーを選ぶ</button> : null}
@@ -376,7 +376,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         <p className="font-semibold">{state.phase === "done" ? "XRiftへのファイル送信が完了しました" : "ファイル送信は完了しました"}</p>
         <p className="break-all text-xs text-zinc-600">{contentLabel}ID: {uploadedContentId(state.result)}</p>
         {state.result.versionNumber !== undefined ? <p className="text-xs text-zinc-600">バージョン: {state.result.versionNumber}</p> : null}
-        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じ{contentLabel}を再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftの{isWorld ? "マイワールド" : "マイアイテム"}で、送信した{contentLabel}が{isWorld ? "再生" : "使用"}できる状態か確認してください。</p>}
+        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした（{state.message}）。同じ{contentLabel}を再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftの{isWorld ? "マイワールド" : "マイアイテム"}で、送信した{contentLabel}が{isWorld ? "再生" : "使用"}できる状態か確認してください。</p>}
         {canSaveWithBrowser && !savedKeyInUse && token ? <div className="flex flex-wrap gap-2">
           {credentialSaveRequested ? <button type="button" onClick={() => void verifyCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "verify" ? "保存済みキーを確認中…" : "保存済みキーを確認"}</button> : null}
           <button type="button" onClick={() => void saveCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "save" ? "保存を依頼中…" : credentialSaveRequested ? "保存をもう一度依頼" : "APIキーをブラウザに保存"}</button>

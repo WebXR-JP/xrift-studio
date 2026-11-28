@@ -187,7 +187,7 @@ export function parseBrowserProjectFiles(files: ReadonlyMap<string, Uint8Array>)
   const prefabDocuments = Object.values(parsedAssets.document.assets)
     .filter((asset) => asset.kind === "template" && asset.templateType === "prefab" && asset.source.kind === "project")
     .map((asset) => {
-      if (asset.source.kind !== "project") throw new Error("Prefabのファイルを確認してください。");
+      if (asset.source.kind !== "project") throw new Error("プレハブのファイルを確認してください。");
       return { relativePath: asset.source.relativePath, content: textFile(files, asset.source.relativePath) };
     });
   return parseVisualProjectFiles({

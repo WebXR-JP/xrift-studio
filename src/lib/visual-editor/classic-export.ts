@@ -318,7 +318,7 @@ export async function exportVisualProjectToClassic(input: {
   if (unsupported) {
     throw new ClassicExportError(
       "asset-unsupported",
-      `Asset「${unsupported.assetId}」はコードエディター向け変換に対応していません。`,
+      `素材「${unsupported.assetId}」はコードエディター向け変換に対応していません。`,
       compilation.diagnostics,
     );
   }
@@ -348,7 +348,7 @@ export async function exportVisualProjectToClassic(input: {
     label: "コードプロジェクトへ追加しています",
     detail:
       input.integration === "component"
-        ? "既存のエントリーを保ち、XRift Studioシーンを独立したComponentとして追加します。"
+        ? "既存のエントリーを残したまま、XRift Studioシーンを独立したComponentとして追加します。"
         : "既存エントリーをバックアップしてXRift Studioシーンへ切り替えます。",
     percent: 46,
   });
@@ -484,7 +484,7 @@ ${plan.xriftJsonPermissions}`,
     if (installed.code !== 0) {
       throw new ClassicExportError(
         "package-install-failed",
-        "必要なパッケージをインストールできませんでした。生成内容とpackage.jsonの記録は保持しているため、ターミナルからパッケージのインストールを再実行できます。",
+        "必要なパッケージをインストールできませんでした。生成したファイルとpackage.jsonの更新内容はそのまま残っているため、ターミナルからパッケージのインストールを再実行できます。",
         compilation.diagnostics,
       );
     }

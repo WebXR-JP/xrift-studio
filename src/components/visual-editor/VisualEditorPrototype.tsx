@@ -1868,7 +1868,7 @@ export function VisualEditorPrototype({
     (options?: {
       onCommit?: (next: PrototypeVisualProject, before: PrototypeVisualProject) => void;
     }) => Promise<LightBakeRunResult>
-  >(async () => ({ ok: false, cancelled: false, message: "Editorの準備ができていません。" }));
+  >(async () => ({ ok: false, cancelled: false, message: "エディターの準備ができていません。" }));
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [modelStoreIntent, setModelStoreIntent] = useState<{ entityId: string; componentId?: string } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -1940,7 +1940,7 @@ export function VisualEditorPrototype({
     if (editorMode !== "edit" || playPreparing || !scriptExecutionScopeRenderCurrent) return;
     let current = true;
     void scriptRuntime.compile({ scene: editPreviewScene }).then(errors => {
-      if (current && errors.length) setNotice(`編集中のScript表示を更新できません: ${errors[0].message}`);
+      if (current && errors.length) setNotice(`編集中のスクリプト表示を更新できません: ${errors[0].message}`);
     });
     return () => { current = false; };
   }, [editorMode, playPreparing, scriptExecutionScopeRenderCurrent, editPreviewScene, scriptRuntime.compile]);
@@ -2533,7 +2533,7 @@ export function VisualEditorPrototype({
     setPlayPreparing(false);
     scriptRuntime.reset();
     setNotice(
-      "プロジェクトの実行範囲が変わったため動作確認準備を中止しました。現在のプロジェクトで改めて動作確認してください",
+      "開いているプロジェクトが変わったため、動作確認の準備を中止しました。現在のプロジェクトでもう一度Playを押してください",
     );
   }, [scriptExecutionScopeInputKey, scriptRuntime.reset]);
   useEffect(() => {
@@ -2577,7 +2577,7 @@ export function VisualEditorPrototype({
     ) {
       throw new XriftMcpEditorToolError(
         "STALE_REVISION",
-        "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
+        "対象シーンが現在のエディターと一致しません。get_editor_contextで再取得してください",
         { projectId, sceneId },
       );
     }
@@ -2812,7 +2812,7 @@ export function VisualEditorPrototype({
       default:
         throw new XriftMcpEditorToolError(
           "TOOL_NOT_FOUND",
-          "対応していないAI editor toolです",
+          "対応していないAI編集ツールです",
         );
     }
   };
@@ -2881,8 +2881,8 @@ export function VisualEditorPrototype({
       try {
         if (request.internalGenerationId) {
           const current = bundleRef.current;
-          if (!request.internalScope || request.internalScope.projectId !== current.project.projectId || request.internalScope.sceneId !== current.scene.sceneId) throw new XriftMcpEditorToolError("SCOPE_CHANGED", "開いている作品またはSceneが変わりました");
-          if (editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Editで素材の処理完了を待ってから再試行してください");
+          if (!request.internalScope || request.internalScope.projectId !== current.project.projectId || request.internalScope.sceneId !== current.scene.sceneId) throw new XriftMcpEditorToolError("SCOPE_CHANGED", "開いているプロジェクトまたはシーンが変わりました");
+          if (editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "編集画面で素材の処理が終わってから再試行してください");
         }
         // The registry says which surface owns a tool, so an unknown name is
         // simply one with no surface rather than something five membership
@@ -2891,7 +2891,7 @@ export function VisualEditorPrototype({
         if (!surface) {
           throw new XriftMcpEditorToolError(
             "TOOL_NOT_FOUND",
-            "対応していないAI editor toolです",
+            "対応していないAI編集ツールです",
           );
         }
         if (!request.internalGenerationId && isAuthoringWriteTool(request.tool)) {
@@ -2934,15 +2934,15 @@ export function VisualEditorPrototype({
           ) {
             throw new XriftMcpEditorToolError(
               "STALE_REVISION",
-              "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
+              "対象シーンが現在のエディターと一致しません。get_editor_contextで再取得してください",
               { projectId, sceneId },
             );
           }
           if (request.tool === "save_scene") {
-            if (editorModeRef.current !== "edit" || importBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Editで素材の処理完了を待ってから保存してください");
+            if (editorModeRef.current !== "edit" || importBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "編集画面で素材の処理が終わってから保存してください");
             const before = bundleRef.current;
-            if (!(await mcpProjectBridgeActionsRef.current?.saveNow())) throw new XriftMcpEditorToolError("EDITOR_ERROR", "Sceneを保存できませんでした");
-            if (bundleRef.current !== before) throw new XriftMcpEditorToolError("STALE_REVISION", "保存中にSceneが変更されました。最新のSceneを保存し直してください");
+            if (!(await mcpProjectBridgeActionsRef.current?.saveNow())) throw new XriftMcpEditorToolError("EDITOR_ERROR", "シーンを保存できませんでした");
+            if (bundleRef.current !== before) throw new XriftMcpEditorToolError("STALE_REVISION", "保存中にシーンが変更されました。最新のシーンを保存し直してください");
             await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId, revision: mcpRevisionRef.current, fingerprint: await authoringFingerprint(before), saved: true } });
             return;
           }
@@ -3069,7 +3069,7 @@ export function VisualEditorPrototype({
                 captured.message,
               );
             }
-            if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new XriftMcpEditorToolError("STALE_REVISION", "撮影中にSceneが変わりました。最新のSceneを撮り直してください");
+            if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new XriftMcpEditorToolError("STALE_REVISION", "撮影中にシーンが変わりました。最新のシーンを撮り直してください");
             if (!tauri.isAvailable()) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAPTURE_FAILED",
@@ -3634,7 +3634,7 @@ export function VisualEditorPrototype({
             if (!placed) {
               throw new XriftMcpEditorToolError(
                 "SCENE_RECIPE_UNAVAILABLE",
-                "この3Dセットを現在のプロジェクトへ配置できませんでした。recipeIdとproject kindを確認してください",
+                "この3Dセットを現在のプロジェクトへ配置できませんでした。recipeIdとプロジェクトの種類を確認してください",
                 { recipeId, projectKind: sourceBundle.project.projectKind },
               );
             }
@@ -4009,7 +4009,7 @@ export function VisualEditorPrototype({
             const entity = sourceBundle.scene.entities[entityId];
             const node = entity && colliderModelNode(entity);
             const collider = entity?.components.find((c) => c.id === componentId && c.type === "collider");
-            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "3DモデルのMeshノードとMesh Collider、残す割合を指定してください");
+            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "3DモデルのメッシュノードとMesh Collider、残す割合を指定してください");
             if (assetOperationRef.current || importRunningRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "素材の処理が終わってから再実行してください");
             const token = Symbol("mcp-collider-bake");
             assetOperationRef.current = { kind: "model-reimport", token };
@@ -4398,7 +4398,7 @@ export function VisualEditorPrototype({
           ) {
             throw new XriftMcpEditorToolError(
               "EDITOR_BUSY",
-              `別の素材操作の完了後に${assetLabel} 読み込みを再試行してください`,
+              `別の素材操作が終わってから${assetLabel}の読み込みを再試行してください`,
             );
           }
           const currentProjectPath = projectPathRef.current;
@@ -4863,7 +4863,7 @@ export function VisualEditorPrototype({
               throw new XriftMcpEditorToolError(
                 "PLAY_MODE_CHANGE_FAILED",
                 mode === "play"
-                  ? "スクリプトの変換または動作確認初期化に失敗しました。Editorの通知を確認してください"
+                  ? "スクリプトの変換または動作確認の初期化に失敗しました。エディターの通知を確認してください"
                   : "動作確認を停止できませんでした。もう一度実行してください",
                 { requestedMode: mode, currentMode: editorModeRef.current },
               );
@@ -4899,7 +4899,7 @@ export function VisualEditorPrototype({
             if (!template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプトTemplateが見つかりません",
+                "指定されたスクリプトテンプレートが見つかりません",
                 { templateId },
               );
             }
@@ -4931,7 +4931,7 @@ export function VisualEditorPrototype({
             if (source === null) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプトTemplateを生成できません",
+                "指定されたスクリプトテンプレートを生成できません",
                 { templateId },
               );
             }
@@ -5124,7 +5124,7 @@ export function VisualEditorPrototype({
             if (templateId && !template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプトTemplateが見つかりません",
+                "指定されたスクリプトテンプレートが見つかりません",
                 { templateId },
               );
             }
@@ -5136,7 +5136,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                `Template ${template.id} は${template.language} スクリプトです`,
+                `テンプレート ${template.id} は${template.language}スクリプトです`,
                 {
                   templateId: template.id,
                   requestedLanguage,
@@ -5210,7 +5210,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                "このスクリプトにはEditorで保存していない変更があります。保存または破棄してから再試行してください",
+                "このスクリプトにはエディターで未保存の変更があります。保存または破棄してから再試行してください",
                 { scriptAssetId: candidate.id },
               );
             }
@@ -5253,7 +5253,7 @@ export function VisualEditorPrototype({
             }
             scriptSourceRevisionRef.current += 1;
             asset = candidate;
-            activity = `AIが「${candidate.name}」のスクリプト元データを更新しました`;
+            activity = `AIが「${candidate.name}」のスクリプトを更新しました`;
           }
 
           const latestBundle = bundleRef.current;
@@ -5313,7 +5313,7 @@ export function VisualEditorPrototype({
               );
             }
             asset = latestCandidate;
-            activity = `AIが「${latestCandidate.name}」のスクリプト元データを更新しました`;
+            activity = `AIが「${latestCandidate.name}」のスクリプトを更新しました`;
           }
           const nextAssets =
             request.tool === "create_script_asset"
@@ -5529,12 +5529,12 @@ export function VisualEditorPrototype({
           );
           const latest = bundleRef.current;
           if (disposed || projectPathRef.current !== currentProjectPath || latest.project.projectId !== sourceBundle.project.projectId || latest.scene.sceneId !== sourceBundle.scene.sceneId) {
-            throw new XriftMcpEditorToolError("STALE_REVISION", "作品またはSceneが変わりました。元の編集状態への反映は行っていません。");
+            throw new XriftMcpEditorToolError("STALE_REVISION", "プロジェクトまたはシーンが切り替わったため、元の編集状態には反映していません。");
           }
           if (editorModeRef.current !== "edit" || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Playと他の素材処理を停止してから再試行してください");
           const mergedAssets = mergeExternalStoreImport(sourceBundle.assets, applied.manifest, latest.assets);
           const applySkybox = args.applySkybox === true && applied.kind === "skybox";
-          if (applySkybox && JSON.stringify(latest.scene.settings?.skybox) !== JSON.stringify(sourceBundle.scene.settings?.skybox)) throw new XriftMcpEditorToolError("STALE_REVISION", "Skyboxが処理中に編集されました。編集内容を保ち、背景への設定を停止しました。");
+          if (applySkybox && JSON.stringify(latest.scene.settings?.skybox) !== JSON.stringify(sourceBundle.scene.settings?.skybox)) throw new XriftMcpEditorToolError("STALE_REVISION", "処理中にSkyboxが変更されたため、今の設定を残して背景への適用を中止しました。");
           const nextBundle = touchProject({
             ...latest,
             assets: mergedAssets,
@@ -5626,7 +5626,7 @@ export function VisualEditorPrototype({
             const checkCurrent = () => {
               if (disposed || projectPathRef.current !== currentProjectPath || editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current
                 || !isMcpDerivedRevisionCurrent(sourceBundle, bundleRef.current, sourceRevision, mcpRevisionRef.current, sourceDerivedRevision, mcpDerivedRevisionRef.current)) {
-                throw new XriftMcpEditorToolError("STALE_REVISION", "R3Fの変換中に編集状態が変わりました。変更を保ち、get_editor_contextで最新の状態を取得してください");
+                throw new XriftMcpEditorToolError("STALE_REVISION", "R3Fの変換中に編集状態が変わりました。現在の変更を残したため、get_editor_contextで最新の状態を取得してください");
               }
             };
             const result = await applyMcpR3fScene(documentContext, request.arguments, checkCurrent);
@@ -5652,14 +5652,14 @@ export function VisualEditorPrototype({
           if (material?.kind === "material" && catalogMaterialTextures(material.properties).some(
             texture => outcome.bundle.assets.assets[texture.assetId]?.kind !== "texture",
           )) {
-            if (!currentProjectPath) throw new XriftMcpEditorToolError("PROJECT_NOT_SAVED", "テクスチャ付きMaterialを追加する前に自動保存の完了を確認してください");
+            if (!currentProjectPath) throw new XriftMcpEditorToolError("PROJECT_NOT_SAVED", "テクスチャ付きマテリアルを追加する前に自動保存の完了を確認してください");
             if (importRunningRef.current || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("IMPORT_BUSY", "素材の処理が終わってから再試行してください");
             const revisionBefore = mcpRevisionRef.current;
             importRunningRef.current = true;
             setMcpLocalAssetImportBusy(true);
             try {
               const assets = await ensureCatalogMaterialTextures(currentProjectPath, outcome.bundle.assets, material.properties);
-              if (!assets) throw new XriftMcpEditorToolError("CATALOG_TEXTURE_IMPORT_FAILED", "Materialのテクスチャを追加できませんでした。接続を確認して再試行してください");
+              if (!assets) throw new XriftMcpEditorToolError("CATALOG_TEXTURE_IMPORT_FAILED", "マテリアルのテクスチャを追加できませんでした。接続を確認して再試行してください");
               const latest = bundleRef.current;
               if (projectPathRef.current !== currentProjectPath || mcpRevisionRef.current !== revisionBefore ||
                   latest.scene !== sourceBundle.scene || latest.project !== sourceBundle.project || latest.prefabs !== sourceBundle.prefabs) {
@@ -6579,7 +6579,7 @@ export function VisualEditorPrototype({
       }
       setAssetSelection(reference.ownerId);
       setDeleteDialog(null);
-      setNotice(`Asset「${reference.ownerName}」を選択しました`);
+      setNotice(`素材「${reference.ownerName}」を選択しました`);
     },
     [setAssetSelection, setSceneSelection],
   );
@@ -7537,7 +7537,7 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Collider設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          ? "Collider設定を保存し、このEntityの動作を最初からやり直しました"
           : "Collider設定をシーンへ反映しました",
       );
     },
@@ -7552,7 +7552,7 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Rigid Body設定を保存し、このRigidBodyの動作確認をやり直しました"
+          ? "Rigid Body設定を保存し、このRigid Bodyの動作を最初からやり直しました"
           : "Rigid Body設定をシーンへ反映しました",
       );
     },
@@ -7586,11 +7586,11 @@ export function VisualEditorPrototype({
         result,
       );
       const source = bundleRef.current;
-      if (projectPathRef.current !== projectPath || source.project.projectId !== startingBundle.project.projectId || source.scene.sceneId !== startingBundle.scene.sceneId) throw new Error("作品またはSceneが変わりました。元の編集状態への反映は行っていません。");
+      if (projectPathRef.current !== projectPath || source.project.projectId !== startingBundle.project.projectId || source.scene.sceneId !== startingBundle.scene.sceneId) throw new Error("プロジェクトまたはシーンが切り替わったため、元の編集状態には反映していません。");
       if (editorModeRef.current !== "edit" || assetOperationRef.current !== null) throw new Error("Playと他の素材処理を停止してから素材を追加してください。");
-      if (modelTarget && (modelTarget.projectId !== source.project.projectId || modelTarget.sceneId !== source.scene.sceneId)) throw new Error("作品またはSceneが変わりました。元のEntityへの設定は行っていません。");
+      if (modelTarget && (modelTarget.projectId !== source.project.projectId || modelTarget.sceneId !== source.scene.sceneId)) throw new Error("プロジェクトまたはシーンが切り替わったため、元のEntityには設定していません。");
       const mergedAssets = mergeExternalStoreImport(startingAssets, applied.manifest, source.assets);
-      if (applySkybox && JSON.stringify(source.scene.settings?.skybox) !== JSON.stringify(startingBundle.scene.settings?.skybox)) throw new Error("Skyboxが処理中に編集されました。編集内容を保ち、背景への設定を停止しました。");
+      if (applySkybox && JSON.stringify(source.scene.settings?.skybox) !== JSON.stringify(startingBundle.scene.settings?.skybox)) throw new Error("処理中にSkyboxが変更されたため、今の設定を残して背景への適用を中止しました。");
       const modelAssignment = modelTarget ? setEntityModel(source.scene, mergedAssets, modelTarget.entityId, applied.primaryAssetId, modelTarget.componentId) : undefined;
       const scene = applySkybox ? assignSkyboxToScene(source.scene, applied.primaryAssetId) : modelAssignment?.scene ?? source.scene;
       const nextBundle = touchProject({ ...source, assets: mergedAssets, scene });
@@ -7913,8 +7913,8 @@ export function VisualEditorPrototype({
       setNotice(
         editorMode === "play"
           ? Object.prototype.hasOwnProperty.call(patch, "lightType")
-            ? "ライト種別を保存し、このEntityの動作確認を先頭から再実行しました"
-            : "ライト設定を保存し、実行状態を保ったまま動作確認へ即時反映しました"
+            ? "ライト種別を保存し、このEntityの動作を最初からやり直しました"
+            : "ライト設定を保存し、実行中のシーンへそのまま反映しました"
           : "ライト設定をシーンへ反映しました",
       );
     },
@@ -7929,7 +7929,7 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "テキスト設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          ? "テキスト設定を保存し、このEntityの動作を最初からやり直しました"
           : "テキスト設定をシーンへ反映しました",
       );
     },
@@ -7944,7 +7944,7 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "画像設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          ? "画像設定を保存し、このEntityの動作を最初からやり直しました"
           : "画像設定をシーンへ反映しました",
       );
     },
@@ -8040,8 +8040,8 @@ export function VisualEditorPrototype({
       setNotice(
         editorMode === "play"
           ? restartsEntity
-            ? "音源構成を保存し、このEntityの動作確認を先頭から再実行しました"
-            : "音源設定を保存し、実行状態を保ったまま動作確認へ即時反映しました"
+            ? "音源構成を保存し、このEntityの動作を最初からやり直しました"
+            : "音源設定を保存し、実行中のシーンへそのまま反映しました"
           : "音源設定をシーンへ反映しました",
       );
     },
@@ -8059,7 +8059,7 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Interaction Triggerを保存し、このEntityの動作確認を先頭から再実行しました"
+          ? "Interaction Triggerを保存し、このEntityの動作を最初からやり直しました"
           : "Interaction Triggerをシーンへ反映しました",
       );
     },
@@ -8078,7 +8078,7 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "風設定を保存し、動作確認へ即時反映しました"
+          ? "風設定を保存し、実行中のシーンへ反映しました"
           : "風設定をシーンへ反映しました",
       );
     },
@@ -8148,7 +8148,7 @@ export function VisualEditorPrototype({
     // Overlapping Terrains tear into moire bands, and the cause is invisible:
     // the author sees broken ground, not two surfaces. Naming it is the fix.
     setNotice(
-      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。Hierarchyのメニューから「地形を横へ並べ直す」を選ぶと解消できます`,
+      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。追加メニューから「重なったTerrainを横へ並べ直す」を選ぶと解消できます`,
     );
   }, [terrainOverlapCount]);
 
@@ -8408,7 +8408,7 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Particle Emitter設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          ? "Particle Emitter設定を保存し、このEntityの動作を最初からやり直しました"
           : "Particle Emitterの設定を更新しました",
       );
     },
@@ -8437,7 +8437,7 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Particle Emitterを削除し、このEntityの動作確認を先頭から再実行しました"
+          ? "Particle Emitterを削除し、このEntityの動作を最初からやり直しました"
           : "Particle Emitterを削除しました",
       );
     },
@@ -8578,7 +8578,7 @@ export function VisualEditorPrototype({
             currentMaterial?.kind === "material"
               ? currentMaterial.name
               : usesOpenBrushSource
-                ? "OpenBrush Brush Shader"
+                ? "Open Brush専用シェーダー"
                 : undefined,
         };
       });
@@ -8610,7 +8610,7 @@ export function VisualEditorPrototype({
           }
           setNotice(
             editorMode === "play"
-              ? "マテリアル設定を保存し、参照中のEntityだけ動作確認へ再反映しました"
+              ? "マテリアル設定を保存し、このマテリアルを使うEntityへ反映しました"
               : "マテリアルの設定を更新し、使用しているメッシュの表示に反映しました",
           );
           return touchProject({ ...current, assets });
@@ -9359,7 +9359,7 @@ export function VisualEditorPrototype({
     if (editorMode !== "edit") return;
     updateScene((scene) => setSceneLightmap(scene, undefined));
     setLightmapViewStatus(null);
-    setNotice("焼いた陰影をSceneから外しました。ライトマップのAssetは残っています。「元に戻す」で戻せます");
+    setNotice("焼き込んだ陰影をシーンから外しました。ライトマップ素材はAssetsに残っています。「元に戻す」で戻せます");
   }, [editorMode, updateScene]);
 
   const handleCancelLightBake = useCallback(() => {
@@ -9385,7 +9385,7 @@ export function VisualEditorPrototype({
         return { ok: false, cancelled: false, message };
       };
       if (editorModeRef.current !== "edit") {
-        return fail("ライトベイクはEdit中に実行できます。Playを止めてから実行してください。");
+        return fail("ライトベイクは編集中に実行できます。Playを止めてから実行してください。");
       }
       const currentProjectPath = projectPathRef.current;
       if (!currentProjectPath) {
@@ -9419,19 +9419,19 @@ export function VisualEditorPrototype({
         collected = bridge.collect(authoredBakedLightComponentIds(startScene));
       } catch (error) {
         return fail(
-          `Sceneを読み取れませんでした。${error instanceof Error ? error.message : String(error)}`,
+          `シーンを読み取れませんでした。${error instanceof Error ? error.message : String(error)}`,
         );
       }
       if (!collected.input.meshes.some((mesh) => mesh.receives)) {
         return fail(
-          "ライトマップを表示できるMeshが対象にありません。対象のMeshを選び、Scene Viewの表示を「シーン」にして、Modelの読み込みが終わってから実行してください。",
+          "ライトマップを適用できるメッシュが対象にありません。対象のメッシュを選び、Scene Viewの表示モードを「シーン」にして、3Dモデルの読み込みが終わってから実行してください。",
         );
       }
       const targetCount = new Set(expectedTargets).size;
       const warnings = [...collected.warnings];
       if (collected.entityIds.length < targetCount) {
         warnings.push(
-          `対象 ${targetCount}件のうち、${collected.entityIds.length}件を焼きました。Unlit・MToon・カスタムシェーダーのMeshは影を落としますが、焼いた陰影は表示しません。`,
+          `対象 ${targetCount}件のうち、${collected.entityIds.length}件に焼き込みました。Unlit・MToon・カスタムシェーダーのメッシュは影を落としますが、焼き込んだ陰影は表示されません。`,
         );
       }
       const signature = computeLightBakeSignature(startScene, startBundle.assets);
@@ -9490,7 +9490,7 @@ export function VisualEditorPrototype({
         setLightBakeWarnings(warnings);
         setLightBakeJob({ state: "idle" });
         setNotice(
-          `ライトベイクが終わりました。${output.size}pxのライトマップをAssetsへ保存し、Sceneに適用しました（${(output.durationMs / 1000).toFixed(1)}秒）`,
+          `ライトベイクが完了しました。${output.size}pxのライトマップをAssetsへ保存し、シーンに適用しました（${(output.durationMs / 1000).toFixed(1)}秒）`,
         );
         return {
           ok: true,
@@ -9507,7 +9507,7 @@ export function VisualEditorPrototype({
       } catch (error) {
         if (error instanceof LightBakeCancelledError) {
           setLightBakeJob({ state: "idle" });
-          setNotice("ライトベイクを中止しました。Sceneは変えていません");
+          setNotice("ライトベイクを中止しました。シーンは変更していません");
           return { ok: false, cancelled: true, message: error.message };
         }
         return fail(error instanceof Error ? error.message : String(error));
@@ -9536,7 +9536,7 @@ export function VisualEditorPrototype({
           componentId,
         ),
       );
-      setNotice("Colliderを元のMeshに戻しました");
+      setNotice("Colliderを元のメッシュに戻しました");
     },
     [updateScene],
   );
@@ -9658,7 +9658,7 @@ export function VisualEditorPrototype({
         if (assets === current.assets) return current;
         setNotice(
           editorMode === "play"
-            ? "パーティクル設定を保存し、参照中のEmitterだけ動作確認へ再反映しました"
+            ? "パーティクル設定を保存し、このパーティクルを使うEmitterへ反映しました"
             : "パーティクル設定を更新し、参照中のEmitterへ反映しました",
         );
         return touchProject({ ...current, assets });

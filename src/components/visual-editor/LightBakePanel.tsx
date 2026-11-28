@@ -196,7 +196,7 @@ export function LightBakePanel({
   const bakeDisabledReason = !canBake
     ? cannotBakeReason
     : targetCount === 0
-      ? "対象のMeshを1つ以上選んでください"
+      ? "対象のメッシュを1つ以上選んでください"
       : undefined;
   const LightIcon = EDITOR_ICONS.light;
 
@@ -238,8 +238,8 @@ export function LightBakePanel({
               <>
                 <p className="text-[13px] font-semibold text-slate-800">まだベイクしていません</p>
                 <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                  動かないMeshを対象に選んでベイクすると、やわらかい影と跳ね返った光が
-                  1枚の画像（ライトマップ）に焼かれます。公開でも同じ画像を使います。
+                  動かないメッシュを対象に選んでベイクすると、やわらかな影と跳ね返った光が
+                  1枚の画像（ライトマップ）に焼き込まれます。公開後も同じ画像を使います。
                 </p>
               </>
             ) : (
@@ -249,8 +249,8 @@ export function LightBakePanel({
                 </p>
                 <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
                   {status.state === "stale"
-                    ? "ベイクの後に、対象・ライト・配置のどれかを変えています。焼き直すと今のSceneに合います。"
-                    : "Scene Viewと公開で、この画像の陰影を使います。"}
+                    ? "ベイクの後に対象・ライト・配置が変更されています。焼き直すと現在のシーンに反映されます。"
+                    : "Scene Viewと公開後のワールドで、この画像の陰影を使います。"}
                 </p>
                 {lightmap ? (
                   <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px] text-slate-600">
@@ -262,7 +262,7 @@ export function LightBakePanel({
                     <dd>1mあたり {lightmap.lightmap.stats.texelsPerMeter.toFixed(1)}px</dd>
                     <dt className="text-slate-500">対象</dt>
                     <dd>
-                      Mesh {lightmap.lightmap.stats.meshCount}件
+                      メッシュ {lightmap.lightmap.stats.meshCount}件
                       {viewStatus && "applied" in viewStatus && viewStatus.applied < viewStatus.total
                         ? `（表示中 ${viewStatus.applied}件）`
                         : ""}
@@ -324,7 +324,7 @@ export function LightBakePanel({
                 type="button"
                 onClick={onRemoveLightmap}
                 disabled={readOnly}
-                title="焼いた陰影をSceneから外します。ライトマップのAssetは残ります"
+                title="焼き込んだ陰影をシーンから外します。ライトマップ素材はAssetsに残ります"
                 className={secondaryButton}
               >
                 外す
@@ -339,7 +339,7 @@ export function LightBakePanel({
 
       <Section
         title="対象のMesh"
-        description="対象にしたMeshは、影を落とし、光を跳ね返し、焼いた陰影を受けます。動かす物は外してください。"
+        description="対象にしたメッシュは、影を落とし、光を跳ね返し、焼き込んだ陰影を受けます。動くオブジェクトは対象から外してください。"
         aside={`${targetCount} / ${meshes.length}`}
       >
         <div className="flex flex-wrap gap-1.5">
@@ -348,7 +348,7 @@ export function LightBakePanel({
             onClick={onTogglePicking}
             disabled={readOnly}
             aria-pressed={picking}
-            title="Scene ViewでMeshをクリックするたびに、対象かどうかを切り替えます"
+            title="Scene Viewでメッシュをクリックするたびに、ベイク対象をオン・オフできます"
             className={
               picking
                 ? "rounded border border-brand-600 bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
@@ -366,7 +366,7 @@ export function LightBakePanel({
               )
             }
             disabled={locked || staticCandidates.every((entry) => entry.target)}
-            title="物理・Script・アニメーションの付いていないMeshをまとめて対象にします"
+            title="物理・スクリプト・アニメーションの付いていないメッシュをまとめて対象にします"
             className={secondaryButton}
           >
             動かないMeshを選ぶ
@@ -387,15 +387,15 @@ export function LightBakePanel({
         </div>
         {picking ? (
           <p className="rounded bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900">
-            Scene Viewで、対象のMeshに色が付いています。クリックすると対象と対象外が切り替わります。
+            Scene Viewで対象のメッシュに色が付いています。クリックすると対象と対象外が切り替わります。
           </p>
         ) : null}
         {meshes.length === 0 ? (
           <p className="text-[11px] leading-4 text-slate-500">
-            SceneにMeshがありません。床や壁を置いてから対象に選びます。
+            シーンにメッシュがありません。床や壁を置いてから対象を選んでください。
           </p>
         ) : (
-          <ul className="scrollbar-thin max-h-64 overflow-y-auto" aria-label="ベイクの対象にできるMesh">
+          <ul className="scrollbar-thin max-h-64 overflow-y-auto" aria-label="ベイクの対象にできるメッシュ">
             {meshes.map((entry) => (
               <MeshRow
                 key={`${entry.entityId}:${entry.componentId}`}
@@ -411,11 +411,11 @@ export function LightBakePanel({
 
       <Section
         title="ライト"
-        description="「ベイク」にしたライトは、影まで焼いて描画から消します。対象でないMeshやアバターには届かなくなります。"
+        description="「ベイク」にしたライトは、光と影をライトマップに焼き込み、リアルタイム描画からは外します。対象外のメッシュやアバターには光が届かなくなります。"
       >
         {lights.length === 0 ? (
           <p className="text-[11px] leading-4 text-slate-500">
-            SceneにLightがありません。環境光とSkyboxの光は、物陰で遮られるぶんだけ焼かれます。
+            シーンにライトがありません。環境光とSkyboxの光による物陰の暗さだけが焼き込まれます。
           </p>
         ) : (
           <ul className="space-y-1.5" aria-label="ライトの扱い">
@@ -450,8 +450,8 @@ export function LightBakePanel({
                       onClick={() => onSetLightMode(light.entityId, light.componentId, mode)}
                       title={
                         mode === "realtime"
-                          ? "描画時に照らします。ベイクは跳ね返った光だけを焼きます"
-                          : "光と影を焼き、描画からは消します"
+                          ? "実行中もリアルタイムに照らします。ベイクでは跳ね返った光だけを焼き込みます"
+                          : "光と影を焼き込み、リアルタイム描画からは外します"
                       }
                       className={`px-2 py-1 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400 disabled:cursor-not-allowed ${light.bakeMode === mode ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
                     >

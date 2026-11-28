@@ -20,7 +20,7 @@ export function ChatgptQuestionForm({ questions, previews, assets, projectPath, 
   const visualChoices = question.choiceCandidateIds?.some(Boolean);
   return <form ref={form} data-chatgpt-question-form aria-label="制作の確認事項" onSubmit={event => { event.preventDefault(); if (!disabled && page === questions.length - 1 && questions.every((_, index) => Boolean(answerFor(index)))) onAnswer(questions.map((_, index) => ({ questionIndex: index, answer: answerFor(index) }))); }} className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
     <p className="text-[11px] text-slate-500" aria-live="polite">確認 {page + 1} / {questions.length}</p>
-    <p className="text-[11px] text-slate-500">Tabで候補を移動、Spaceで選択できます。</p>
+    <p className="text-[11px] text-slate-500">Tabで候補を移動し、Spaceで選択できます。</p>
     <div hidden data-chatgpt-copy-hidden>{questions.map((item, index) => <div key={index}><p>確認{index + 1}: {item.question}</p>{item.choices.map((choice, i) => <p key={i}>{i + 1}. {choice}</p>)}<p>その他（自由入力）</p></div>)}</div>
     <fieldset data-chatgpt-copy-skip disabled={disabled} className="min-w-0 space-y-2" onKeyDown={event => {
       if (event.key !== "Tab" || !(event.target instanceof HTMLInputElement) || event.target.type !== "radio") return;

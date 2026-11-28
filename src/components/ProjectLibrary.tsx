@@ -567,7 +567,7 @@ export function ProjectLibrary({
           {!loading && projects.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
               <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
-              <p className="mt-1 text-xs text-zinc-500">「新規プロジェクト」から作成してください。既存のプロジェクトは.xriftstudioファイル、.zipファイル、Gitリポジトリから取り込めます。</p>
+              <p className="mt-1 text-xs text-zinc-500">「新規プロジェクト」から新しく作るか、.xriftstudio・.zipファイルやGitリポジトリから既存のプロジェクトを取り込んで始められます。</p>
             </div>
           ) : null}
 

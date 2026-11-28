@@ -727,7 +727,7 @@ export function MeshVisual({
     if (!component.enabled || primitive || terrain || extrude) {
       reportModelLoad({ status: "ready" });
     } else if (!projectModelSource || !projectPath) {
-      reportModelLoad({ status: "error", message: "描画とColliderに使うModelを読み込めません" });
+      reportModelLoad({ status: "error", message: "描画とColliderに使う3Dモデルを読み込めません" });
     }
     // Valid project models report their asynchronous load through the child.
   }, [component.enabled, primitive, terrain, extrude, projectModelSource, projectPath, reportModelLoad]);
@@ -2078,7 +2078,7 @@ function useModelNodeColliderGeometry(
   useEffect(() => {
     setLoaded(null);
     if (!projectPath || !sourceRelativePath) {
-      reportCollisionLoad({ status: "error", message: "ColliderのModelが見つかりません" });
+      reportCollisionLoad({ status: "error", message: "Collider用の3Dモデルが見つかりません" });
       return;
     }
     let active = true;
@@ -2087,7 +2087,7 @@ function useModelNodeColliderGeometry(
       .then((data) => {
         if (!active) return;
         const geometry = extractModelNodeColliderGeometry(data.object, sourceNodeIndex);
-        if (!geometry) throw new Error("Colliderに使えるMeshがModel内に見つかりません");
+        if (!geometry) throw new Error("Colliderに使えるメッシュが3Dモデル内に見つかりません");
         setLoaded({ key: sourceKey, geometry });
         reportCollisionLoad({ status: "ready" });
       })
@@ -2096,7 +2096,7 @@ function useModelNodeColliderGeometry(
         setLoaded(null);
         const message = error instanceof Error ? error.message : String(error);
         reportCollisionLoad({ status: "error", message });
-        console.error("ColliderのModelを読み込めませんでした:", error);
+        console.error("Collider用の3Dモデルを読み込めませんでした:", error);
       });
     return () => { active = false; };
   }, [projectPath, sourceHash, sourceRelativePath, sourceNodeIndex, sourceKey, reportCollisionLoad]);
@@ -6626,15 +6626,15 @@ export function SceneViewport({
           ? materialDropTarget?.status === "rejected"
             ? materialDropTarget.message
             : readyMaterialDropTarget
-              ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "Mesh"}へマテリアルを適用`
+              ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "メッシュ"}へマテリアルを適用`
               : "マテリアルを適用するメッシュの上へ移動"
           : dragOverKind === "skybox"
             ? `${dragOverLabel ?? "Skybox"}をシーン全体へ設定`
           : dragOverKind === "builtin-prefab"
             ? `${dragOverLabel ?? "XRift Component"}を配置`
             : dragOverKind === "scene-asset"
-              ? `${dragOverLabel ?? "Model / Prefab / Particle"}をシーンへ配置`
-        : "CreateメニューからPrimitiveを追加";
+              ? `${dragOverLabel ?? "3Dモデル / プレハブ / パーティクル"}をシーンへ配置`
+        : "「追加」メニューから基本形状を追加";
 
   const MaximizeIcon = EDITOR_ICONS.maximize;
   const MinimizeIcon = EDITOR_ICONS.minimize;
@@ -7044,7 +7044,7 @@ export function SceneViewport({
                           SCENE_VIEWPORT_QUALITY_OPTIONS.find(
                             (option) => option.value === qualityMode,
                           )?.description ?? ""
-                        }\nこのディスプレイでの実描画: 表示サイズの${Math.round(
+                        }\nこのディスプレイでの描画解像度: 表示サイズの${Math.round(
                           activeRenderScale * 100,
                         )}%`
                   }
@@ -7623,8 +7623,8 @@ export function SceneViewport({
               >
                 {!playRuntimeReady
                   ? playLoadErrors.length > 0
-                    ? `Playを開始できません: ${playLoadErrors[0]}。停止して対象のModel・Colliderを確認してください`
-                    : "ModelとColliderを準備中…"
+                    ? `Playを開始できません: ${playLoadErrors[0]}。停止して対象の3DモデルとColliderを確認してください`
+                    : "3DモデルとColliderを準備中…"
                   : tablet
                     ? "中央の照準を対象に合わせて「操作」を押します"
                     : playLockRefused === "unsupported"
@@ -7638,7 +7638,7 @@ export function SceneViewport({
             ) : null}
             {lastReloadedEntityName ? (
               <p className="mt-1 border-t border-violet-300/20 pt-1 text-violet-100">
-                {lastReloadedEntityName} を先頭から再実行
+                {lastReloadedEntityName} の動作を最初からやり直しました
               </p>
             ) : null}
           </div>

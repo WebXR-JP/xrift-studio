@@ -18,7 +18,7 @@ export async function createBlenderModelAsset(bundle: PrototypeVisualProject, mo
   execution.checkCurrent?.();
   const spec = parseBlenderModelSpec(model);
   const previousAsset = metadata.previousAssetId ? bundle.assets.assets[metadata.previousAssetId] : undefined;
-  if (metadata.previousAssetId && previousAsset?.kind !== "model") throw new Error("制作を続ける元のModelがAssetsにありません");
+  if (metadata.previousAssetId && previousAsset?.kind !== "model") throw new Error("制作を続ける元のモデルがAssetsに見つかりません");
   const previous = previousAsset?.kind === "model" ? await readBlenderModelSource(previousAsset, projectPath) : null;
   execution.checkCurrent?.();
   if (previousAsset?.kind === "model" && previousAsset.status === "ready" && previous
@@ -38,13 +38,13 @@ export async function createBlenderModelAsset(bundle: PrototypeVisualProject, mo
   const plan = await createAssetImportPlan({ fileName: `model-${recipe.authoring.sourceHash.slice(0, 24)}.glb`, bytes, mimeType: source.mimeType,
     displayName: spec.name, preferredKind: "model", folderId: null, existingManifest: bundle.assets });
   execution.checkCurrent?.();
-  if (!plan.canCommit || plan.asset?.kind !== "model") throw new Error(plan.diagnostics.find(item => item.severity === "blocking")?.message ?? "作成したGLBをModelとして取り込めませんでした");
+  if (!plan.canCommit || plan.asset?.kind !== "model") throw new Error(plan.diagnostics.find(item => item.severity === "blocking")?.message ?? "作成したGLBをモデルとして取り込めませんでした");
   plan.asset = { ...plan.asset, ...(previousAsset?.kind === "model" ? { importSettings: structuredClone(previousAsset.importSettings) } : {}), authoring: recipe.authoring };
   plan.writes.push(recipe.write);
   const blend = await tauri.readLocalModelImportSource(generated.blendPath);
   execution.checkCurrent?.();
   const blendBytes = new Uint8Array(await (await fetch(blend.dataUrl)).arrayBuffer());
-  if (blendBytes.byteLength !== blend.byteLength) throw new Error("Blenderの編集元を読み込めませんでした");
+  if (blendBytes.byteLength !== blend.byteLength) throw new Error("Blenderの元データ（.blend）を読み込めませんでした");
   await attachBlenderSource(plan, blendBytes, `${spec.name}.blend`);
   execution.checkCurrent?.();
   const assets = await commitAssetImportPlanToDisk(projectPath, bundle.assets, plan);

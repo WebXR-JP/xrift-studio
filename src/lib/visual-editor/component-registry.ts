@@ -1016,7 +1016,7 @@ export function addXriftComponent(
     return mutationFailure(
       scene,
       "unknown-xrift-component-schema",
-      `未登録のXRiftのComponent schemaです: ${schemaId}`,
+      `未登録のXRift Component定義です: ${schemaId}`,
       `${entityPath(entityId)}.components`,
       { entityId, schemaId },
     );
@@ -1054,7 +1054,7 @@ export function addXriftComponent(
     return mutationFailure(
       scene,
       "unknown-xrift-component-schema",
-      `未登録のXRiftのComponent schemaです: ${schemaId}`,
+      `未登録のXRift Component定義です: ${schemaId}`,
       `${entityPath(entityId)}.components`,
       { entityId, schemaId },
     );
@@ -1115,7 +1115,7 @@ export function removeXriftComponent(
     return mutationFailure(
       scene,
       "component-type",
-      "指定されたComponentはXRiftのComponentではありません。",
+      "指定されたComponentはXRift公式Componentではありません。",
       `${entityPath(entityId)}.components`,
       { entityId, componentId },
     );
@@ -1124,7 +1124,7 @@ export function removeXriftComponent(
     return mutationFailure(
       scene,
       "xrift-component-authoring-locked",
-      "組み込みプレハブのXRiftのComponentは読み取り専用です。Entityを削除するか、通常のComponentを追加してください。",
+      "組み込みプレハブのXRift公式Componentは削除できません。Entityごと削除するか、通常のComponentを追加してください。",
       `${entityPath(entityId)}.components`,
       { entityId, componentId, schemaId: component.schemaId },
     );
@@ -1179,7 +1179,7 @@ export function updateXriftComponent(
     return mutationFailure(
       scene,
       "component-type",
-      "指定されたComponentはXRiftのComponentではありません。",
+      "指定されたComponentはXRift公式Componentではありません。",
       `${entityPath(entityId)}.components[${componentIndex}]`,
       { entityId, componentId },
     );
@@ -1198,7 +1198,7 @@ export function updateXriftComponent(
       return mutationFailure(
         scene,
         "xrift-component-authoring-locked",
-        "組み込みプレハブでは設定に許可された設定だけを変更できます。構成と位置・回転・大きさは保護されています。",
+        "組み込みプレハブでは編集が許可された項目だけを変更できます。構成と位置・回転・大きさは保護されています。",
         `${entityPath(entityId)}.components[${componentIndex}]`,
         { entityId, componentId, schemaId: component.schemaId },
       );
@@ -1372,7 +1372,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component",
-        "XRiftのComponentはEntityで、typeはxrift-componentである必要があります。",
+        "XRift公式Componentはオブジェクト形式で、typeがxrift-componentである必要があります。",
         path,
         { entityId: context.entityId },
       ),
@@ -1390,7 +1390,7 @@ export function validateXriftComponent(
   }
   if (typeof value.enabled !== "boolean") {
     diagnostics.push(
-      makeDiagnostic("error", "invalid-xrift-component", "enabledはbooleanである必要があります。", `${path}.enabled`, common),
+      makeDiagnostic("error", "invalid-xrift-component", "enabledはtrueまたはfalseである必要があります。", `${path}.enabled`, common),
     );
   }
   if (!schemaId?.trim()) {
@@ -1419,7 +1419,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component",
-        "assetReferencesはstring配列である必要があります。",
+        "assetReferencesは文字列の配列である必要があります。",
         `${path}.assetReferences`,
         common,
       ),
@@ -1430,7 +1430,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component",
-        "entityReferencesはstring配列である必要があります。",
+        "entityReferencesは文字列の配列である必要があります。",
         `${path}.entityReferences`,
         common,
       ),
@@ -1458,7 +1458,7 @@ export function validateXriftComponent(
         makeDiagnostic(
           "warning",
           "unknown-xrift-component-schema",
-          `未登録のXRiftのComponent schemaを保持しています: ${schemaId}`,
+          `未登録のXRift Component定義が含まれています: ${schemaId}`,
           `${path}.schemaId`,
           common,
         ),
@@ -1562,7 +1562,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "warning",
         "unknown-xrift-component-field",
-        `${definition.label}.${fieldName}はauthoring registryに未登録のため、値を保持したまま編集対象外にします。`,
+        `${definition.label}.${fieldName}は編集対象外の項目のため、現在の値を残したまま変更できない状態で扱います。`,
         `${path}.properties.${fieldName}`,
         {
           ...common,
@@ -1600,7 +1600,7 @@ export function validateXriftComponentFieldValue(
   }
   if (definition.kind === "number" || definition.kind === "color-number") {
     if (typeof value !== "number" || !Number.isFinite(value)) {
-      return typeFailure("有限のnumber");
+      return typeFailure("有限の数値");
     }
     if (
       definition.range?.min !== undefined &&
@@ -1642,7 +1642,7 @@ export function validateXriftComponentFieldValue(
     return (typeof value === "number" && Number.isFinite(value)) ||
       isFiniteNumberArray(value, 3)
       ? null
-      : typeFailure("numberまたは [number, number, number]");
+      : typeFailure("数値または [number, number, number]");
   }
   if (definition.kind === "grabbable-transform") {
     if (!isPlainObjectRecord(value)) return typeFailure("GrabbableTransform");
@@ -1659,7 +1659,7 @@ export function validateXriftComponentFieldValue(
   }
   if (definition.kind === "json-object") {
     if (!isPlainObjectRecord(value) || !isSerializableJsonValue(value)) {
-      return typeFailure("JSON object");
+      return typeFailure("JSONオブジェクト");
     }
     const propertyDefinitions = definition.jsonObjectProperties;
     if (!propertyDefinitions) return null;
@@ -1691,7 +1691,7 @@ export function validateXriftComponentFieldValue(
         typeof tag.color !== "string" ||
         !/^#[0-9a-f]{6}$/i.test(tag.color)
       ) {
-        return typeFailure("id、label、HEX colorを持つTag[]");
+        return typeFailure("id、label、16進カラーコードを持つTag配列");
       }
       if (ids.has(tag.id)) {
         return { code: "duplicate", message: `Tag ID「${tag.id}」が重複しています。` };

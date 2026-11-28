@@ -463,7 +463,7 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        クラシックから変換
+                        コードプロジェクトから変換
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
                         コードで作ったシーンを、ビジュアルエディター用に変換します。
@@ -591,7 +591,7 @@ export function NewProjectDialog({
                       </div>
                     )}
                     <p className="mt-3 text-xs leading-5 text-zinc-500">
-                      選んだプロジェクト種別のシーンを読み込みます。動的な処理は変換できません。床、ライト、SpawnPointは元のシーンにあるものだけを取り込みます。
+                      選んだプロジェクト種別のシーンを読み込みます（動的な処理は変換の対象外です）。床・ライト・SpawnPointは元のシーンに含まれているものだけを取り込みます。
                     </p>
                     {classicProjectSelectError && (
                       <p className="mt-2 text-sm text-rose-700">
@@ -678,7 +678,7 @@ export function NewProjectDialog({
                     ? "読み込み・変換中…"
                     : "作成中…"
                   : importingClassic
-                    ? "インポートして開く"
+                    ? "取り込んで開く"
                     : "作成して開く"}
               </button>
             </div>

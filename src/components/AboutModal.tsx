@@ -48,7 +48,7 @@ const RESET_META: Record<
   runtime: {
     title: "ランタイムをリセット",
     description:
-      "アプリ専用のNode.js、@xrift/cli、XRiftのログイン情報を削除します。プロジェクトとChatGPTの接続は残ります。\nアプリの再起動後に、必要なツールを再インストールしてください。",
+      "アプリ専用のNode.js・@xrift/cli・XRiftのログイン情報を削除します（プロジェクトとChatGPTの接続は残ります）。\nアプリの再起動後、必要なツールを再インストールしてください。",
     confirm: "リセットして再起動",
   },
   all: {
@@ -226,7 +226,7 @@ export function AboutModal({
               データの削除とリセット
             </div>
             <div className="mt-1 text-[11px] leading-relaxed text-rose-700/80">
-              リセットするとアプリが再起動します。起動後にセットアップを行ってください。
+              リセット後はアプリが再起動するため、起動後にもう一度セットアップを行ってください。
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button

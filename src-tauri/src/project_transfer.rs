@@ -278,7 +278,7 @@ pub fn export_project_archive(
         .to_string();
     let archive = PathBuf::from(&archive_path);
     if archive.starts_with(&source) {
-        return Err("書き出し先をプロジェクトの中にすることはできません".to_string());
+        return Err("プロジェクトフォルダーの中には書き出せません".to_string());
     }
     if let Ok(existing) = std::fs::symlink_metadata(&archive) {
         if !existing.is_file() {
@@ -429,7 +429,7 @@ fn open_project_archive(archive_path: &str) -> Result<(PathBuf, zip::ZipArchive<
     let metadata = std::fs::symlink_metadata(&path)
         .map_err(|e| format!("アーカイブを開けません: {}", e))?;
     if !metadata.is_file() {
-        return Err("アーカイブは通常のファイルである必要があります".to_string());
+        return Err("アーカイブには通常のファイルを指定してください".to_string());
     }
     let file = std::fs::File::open(&path).map_err(|e| format!("アーカイブを開けません: {}", e))?;
     let archive = zip::ZipArchive::new(file)
@@ -519,7 +519,7 @@ pub fn inspect_project_archive(archive_path: String) -> Result<ProjectArchiveIns
         }
     }
     if total_bytes > PROJECT_ARCHIVE_MAX_UNPACKED_BYTES {
-        return Err("アーカイブの展開後サイズが大きすぎます".to_string());
+        return Err("アーカイブの展開後のサイズが大きすぎます".to_string());
     }
 
     Ok(ProjectArchiveInspection {
@@ -570,13 +570,13 @@ pub fn import_project_archive(
                     .map_err(|e| format!("{}: {}", relative.display(), e))?,
             );
             if unpacked > PROJECT_ARCHIVE_MAX_UNPACKED_BYTES {
-                return Err("アーカイブの展開後サイズが大きすぎます".to_string());
+                return Err("アーカイブの展開後のサイズが大きすぎます".to_string());
             }
             output.flush().map_err(|e| e.to_string())?;
         }
         if !temporary.join(VISUAL_PROJECT_MANIFEST).is_file() && !temporary.join("xrift.json").is_file()
         {
-            return Err("アーカイブからプロジェクトの定義を取り出せませんでした".to_string());
+            return Err("アーカイブからプロジェクト定義ファイルを取り出せませんでした".to_string());
         }
         detach_visual_manifest(temporary, None)
     })

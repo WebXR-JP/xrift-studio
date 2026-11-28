@@ -274,7 +274,7 @@ function ParticleQuickTools({
     <Section title="まとめて操作">
       <div>
         <p className="mb-1.5 text-[11px] leading-4 text-slate-500">
-          テクスチャとマテリアルを保ち、動きと色を変更します。
+          テクスチャとマテリアルはそのままに、動きと色を変更します。
         </p>
         <div className="grid grid-cols-2 gap-1.5">
           {PARTICLE_AUTHORING_PRESETS.map((preset) => (

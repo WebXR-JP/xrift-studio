@@ -2,7 +2,7 @@ import type { PrototypeVisualProject } from "./prototype-project";
 
 /** Only same-Scene authoring conflicts are eligible for planning again. */
 export class ChatgptSceneConflictError extends Error {
-  constructor(message = "変更するEntity・素材・SkyboxがPlanの作成後に編集されました。編集内容を保ち、Planの反映を停止しました。Planを作り直してください") {
+  constructor(message = "変更対象のEntity・素材・Skyboxがプランの作成後に編集されました。現在の編集内容を残すため反映を停止しました。最新の状態からプランを作り直してください") {
     super(message);
     this.name = "ChatgptSceneConflictError";
   }
@@ -18,5 +18,5 @@ export function chatgptPlanningSnapshot(bundle: PrototypeVisualProject): string 
 }
 
 export function assertChatgptPlanningCurrent(bundle: PrototypeVisualProject, expected: string) {
-  if (chatgptPlanningSnapshot(bundle) !== expected) throw new ChatgptSceneConflictError("制作を考えている間にSceneや素材が編集されました。最新の内容から続きを考えます");
+  if (chatgptPlanningSnapshot(bundle) !== expected) throw new ChatgptSceneConflictError("制作プランを作成している間にSceneや素材が編集されました。最新の内容から考え直します");
 }

@@ -16,7 +16,7 @@ export const chatgptHarnessContextPath = (fingerprint: string) => `${prefix}${fi
 
 /** Reject malformed and future references without rewriting or dropping them. */
 export function normalizeChatgptHarnessContextRef(value: unknown): ChatgptHarnessContextRef {
-  const invalid = () => new Error("制作入力の参照記録を読み込めません。保存した会話履歴を確認してください。");
+  const invalid = () => new Error("制作時の参照記録を読み込めませんでした。保存された会話履歴を確認してください。");
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw invalid();
   const entry = value as Record<string, unknown>;
   if (Object.keys(entry).some(key => !["version", "kind", "fingerprint", "sceneFingerprint", "relativePath", "byteLength", "contextBytes"].includes(key))

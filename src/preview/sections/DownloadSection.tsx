@@ -86,7 +86,7 @@ export function DownloadSection() {
         <div className="landing-section-heading">
           <p className="landing-eyebrow">ダウンロード</p>
           <h2>デスクトップ版を<br />ダウンロード</h2>
-          <p>スクリプトを含む作品の公開、ChatGPTやMCPとの連携にはデスクトップ版が必要です。使っているOSに合うファイルを選んでください。</p>
+          <p>スクリプトを含む作品の公開や、ChatGPT・MCPとの連携にはデスクトップ版が必要です。お使いのOSに合うファイルを選んでください。</p>
           <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="landing-text-link">
             インストール手順を見る
           </a>
@@ -179,7 +179,7 @@ export function DownloadSection() {
                     </summary>
                     <p className="preview-download-hash">{cta.option.sha256}</p>
                     <p className="preview-download-note">
-                      保存したファイルのSHA-256を計算し、この値と比較してください。一致すれば、GitHubで公開されているファイルと同じ内容です。
+                      ダウンロードしたファイルのSHA-256とこの値が一致すれば、GitHubで公開されているファイルと同一であることを確認できます。
                     </p>
                   </details>
                 ) : null}
@@ -188,10 +188,10 @@ export function DownloadSection() {
               <div className="mt-4">
                 <p className="text-sm font-bold leading-7 text-zinc-800">
                   {cta.platform === "mobile"
-                    ? "デスクトップ版はWindows・macOS・Linuxで使えます。この端末では、インストール不要のブラウザ版βを試してください。"
+                    ? "デスクトップ版はWindows・macOS・Linux向けです。この端末では、インストール不要のブラウザ版βをお試しください。"
                     : cta.platform === null
-                      ? "少しお待ちください。"
-                      : "このパソコンに合うファイルを判別できませんでした。下の一覧から選んでください。"}
+                      ? "環境を確認しています…"
+                      : "お使いのOSに合うファイルを自動で判別できませんでした。下の一覧から選んでください。"}
                 </p>
                 <p className="mt-2 text-xs font-semibold text-zinc-500">
                   <a href={editorUrl} className="landing-text-link">ブラウザ版を試す<span className="landing-beta-mark">β</span></a>

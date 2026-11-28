@@ -28,7 +28,7 @@ const record = (value: unknown): value is Record<string, unknown> => Boolean(val
 const hash = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 const text = (value: unknown, limit: number): value is string => typeof value === "string" && [...value].length <= limit && !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/u.test(value);
 const assetId = (value: unknown): value is string => typeof value === "string" && Boolean(value.trim()) && value.length <= 240 && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
-const invalidSource = () => new Error("モデルの制作データを確認できませんでした。Assetsの元モデルと制作データを確認してください");
+const invalidSource = () => new Error("モデルの制作データを読み取れませんでした。Assetsの元モデルと制作データを確認してください");
 
 export async function blenderModelSourceHash(bytes: Uint8Array): Promise<string> {
   const owned = new Uint8Array(bytes.byteLength);
@@ -105,7 +105,7 @@ export function resolveBlenderEntityModelAsset(bundle: PrototypeVisualProject, e
   const mesh = componentId ? meshes.find(component => component.id === componentId) : meshes.length === 1 ? meshes[0] : undefined;
   if (!entity || entity.modelNode || (componentId && !mesh) || (!componentId && meshes.length > 1)
     || mesh?.geometry?.kind === "asset" && (mesh.geometry.sourceNodeIndex !== undefined || mesh.geometry.sourceNodeName !== undefined)) {
-    throw new Error("制作を続けるモデルのMesh Rendererを指定してください。モデル内部の一部を選んだ場合は元のEntityを選び直してください");
+    throw new Error("制作を続けるモデルのMesh Rendererを指定してください。モデル内部のパーツを選んだ場合は、元のEntityを選び直してください");
   }
   let modelAssetId = mesh?.geometry?.kind === "asset" ? mesh.geometry.assetId : mesh?.geometryAssetId;
   if (!mesh) {
@@ -124,7 +124,7 @@ export function resolveBlenderEntityModelAsset(bundle: PrototypeVisualProject, e
       if (!owned) continue;
       for (const component of child.components) if (component.type === "mesh") candidates.add(component.geometry?.kind === "asset" ? component.geometry.assetId : component.geometryAssetId);
     }
-    if (candidates.size > 1) throw new Error("制作を続けるモデルを一つに絞ってください");
+    if (candidates.size > 1) throw new Error("制作を続けるモデルを1つに絞ってください");
     modelAssetId = [...candidates][0];
   }
   if (!modelAssetId) return null;

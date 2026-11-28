@@ -600,7 +600,7 @@ fn glb_metadata(path: &Path, directory: &Path) -> Result<u64, String> {
         || json_length < 2
         || json_length > metadata.len() - 20
     {
-        return Err("Blenderが出力したGLBの署名が一致しません".into());
+        return Err("Blenderが出力したGLBの形式が正しくありません".into());
     }
     Ok(metadata.len())
 }
@@ -653,7 +653,7 @@ async fn run_model(
             .canonicalize()
             .map_err(|error| error.to_string())?
     {
-        return Err("Blenderが扱えるモデルの作業フォルダーを確認できませんでした".into());
+        return Err("Blenderから参照できるモデルの作業フォルダーを確認できませんでした".into());
     }
     let stdout = OpenOptions::new()
         .write(true)

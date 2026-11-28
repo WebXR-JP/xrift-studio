@@ -41,8 +41,8 @@ export function GuideHost() {
   return createPortal(Panel ? <Panel key={request.id} initialPage={request.page} onClose={close} /> :
     <aside className="embedded-guide" role="dialog" aria-label="使い方ガイド" onKeyDown={(event) => {event.stopPropagation();if(event.key === "Escape")close();}}>
       <div className="embedded-guide-toolbar"><strong>使い方ガイド</strong><button type="button" onClick={close} autoFocus>閉じる</button></div>
-      <div className="embedded-guide-body"><p role="status">{failed ? "ガイドを読み込めませんでした。編集内容は変更していません。" : "ガイドを開いています…"}</p>
+      <div className="embedded-guide-body"><p role="status">{failed ? "ガイドを読み込めませんでした。編集中のデータに影響はありません。" : "ガイドを開いています…"}</p>
         {failed && <button type="button" onClick={() => setAttempt((value) => value + 1)}>もう一度読み込む</button>}
-        <GuideExternalLink page={request.page} label="ブラウザーでガイドを開く" /></div>
+        <GuideExternalLink page={request.page} label="ブラウザでガイドを開く" /></div>
     </aside>, document.body);
 }
