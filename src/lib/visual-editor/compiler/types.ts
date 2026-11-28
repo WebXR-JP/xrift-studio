@@ -113,10 +113,21 @@ export type VisualCompileResult = {
   runtimeManifestFile?: CompilerOverlayFile;
   stagingPlan: CompilerStagingPlan;
   /**
+   * Where each Script Asset was emitted in the staged project, so a build
+   * error reported against the staged copy can name the Script it came from.
+   */
+  scriptModules: EmittedScriptLocation[];
+  /**
    * Platform permissions this world declares, and why. Absent when the world
    * publishes with every security check enforced.
    */
   publishPermissions?: ResolvedPublishPermissions;
+};
+
+export type EmittedScriptLocation = {
+  assetId: string;
+  /** Path relative to the staging project root, for example `src/scripts/Script.tsx`. */
+  relativePath: string;
 };
 
 export type VisualCompilerOptions = {

@@ -48,7 +48,7 @@ import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEdit
 import { usePublishReview } from "./lib/visual-editor/use-publish-review";
 import { PUBLISH_REVIEW_FAILURE, analyzePublishReview } from "./lib/visual-editor/publish-review";
 import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
-import { applyAssetOptimizations, exportVisualProjectToClassic, estimateWorldVram, inspectClassicExportTarget, createVisualProjectFromClassicSource, createStarterVisualProject, createPreparedStarterVisualProjectOnDisk, createVisualProjectOnDisk, describeAnimationComponentMigration, defaultVisualStarterTemplateId, publishVisualProject, clearStaleXriftUploadAttempt, XriftMcpEditorToolError, buildPublishReadiness, editorSessionUnavailableError, inspectVisualPublishMetadata, isXriftMcpProjectTool, listStarterTemplates, parseCreateProjectArguments, parseNewProjectDirectoryName, parseOptionalProjectTitle, parseRequiredPath, resolveProjectTarget, resolveTransferableProject, summarizeProject, type VisualPublishPipelineProgress, readVisualProjectFromDisk, prepareStarterVisualProject, saveVisualProjectToDisk, StarterAssetCopyError, listScriptAssets, type AssetManifest, type PrototypeVisualProject, type ClassicExportIntegration, type ClassicExportProgress, type ClassicExportTarget, type StarterVisualProjectPlan, type VisualPublicationRecord, type VisualStarterTemplateId, type ClassicProjectCreationSource } from "./lib/visual-editor";
+import { applyAssetOptimizations, exportVisualProjectToClassic, estimateWorldVram, inspectClassicExportTarget, createVisualProjectFromClassicSource, createStarterVisualProject, createPreparedStarterVisualProjectOnDisk, createVisualProjectOnDisk, describeAnimationComponentMigration, defaultVisualStarterTemplateId, publishVisualProject, verifyVisualProjectBuild, clearStaleXriftUploadAttempt, XriftMcpEditorToolError, buildPublishReadiness, editorSessionUnavailableError, inspectVisualPublishMetadata, isXriftMcpProjectTool, listStarterTemplates, parseCreateProjectArguments, parseNewProjectDirectoryName, parseOptionalProjectTitle, parseRequiredPath, resolveProjectTarget, resolveTransferableProject, summarizeProject, type VisualPublishPipelineProgress, readVisualProjectFromDisk, prepareStarterVisualProject, saveVisualProjectToDisk, StarterAssetCopyError, listScriptAssets, type AssetManifest, type PrototypeVisualProject, type ClassicExportIntegration, type ClassicExportProgress, type ClassicExportTarget, type StarterVisualProjectPlan, type VisualPublicationRecord, type VisualStarterTemplateId, type ClassicProjectCreationSource } from "./lib/visual-editor";
 
 const EditorView = lazy(() => import("./components/EditorView").then(module => ({ default: module.EditorView })));
 const McpConnectionSettings = lazy(() => import("./components/visual-editor/McpConnectionSettings").then(module => ({ default: module.McpConnectionSettings })));
@@ -92,6 +92,18 @@ async function readScriptSources(
     if (read) sources[read.id] = read.source;
   }
   return sources;
+}
+
+/**
+ * Keeps both ends of a long CLI output for an MCP answer.
+ *
+ * The official check prints its verdict first and the recovered build output
+ * last, so cutting either end can drop the one line that says what failed.
+ */
+function clipCommandOutput(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const half = Math.floor(limit / 2);
+  return `${text.slice(0, half)}\n…（${text.length - limit}文字を省略）…\n${text.slice(-half)}`;
 }
 
 function withLatestPublication(
@@ -892,6 +904,47 @@ function App() {
     }
   };
 
+  /**
+   * Runs the publish pipeline up to the upload, for get_publish_readiness
+   * with verifyBuild. Holds the publish lock because both use the project's
+   * one staging directory.
+   */
+  const runVisualBuildCheck = async (
+    publishBundle: PrototypeVisualProject,
+    authoringProjectPath: string,
+    scriptSources: Record<string, string>,
+    report: (progress: VisualPublishPipelineProgress) => void,
+    signal: AbortSignal,
+  ) => {
+    if (mcpPublishActiveRef.current || chatgptGenerationRef.current || mcpModelingActiveRef.current) {
+      throw new XriftMcpEditorToolError(
+        "EDITOR_BUSY",
+        "別の公開または制作処理を進行中です。完了してからもう一度確かめてください",
+      );
+    }
+    mcpPublishActiveRef.current = true;
+    try {
+      return await verifyVisualProjectBuild({
+        authoringProjectPath,
+        kind: publishBundle.project.projectKind,
+        documents: {
+          project: publishBundle.project,
+          scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
+          assets: publishBundle.assets,
+          prefabs: publishBundle.prefabs,
+          scriptSources,
+        },
+        // get_publish_readiness saved exactly this snapshot a moment ago.
+        save: async () => authoringProjectPath,
+        report,
+        onLog: appendLog,
+        signal,
+      });
+    } finally {
+      mcpPublishActiveRef.current = false;
+    }
+  };
+
   const performVisualPublish = async (
     publishBundle: PrototypeVisualProject,
     report: (progress: VisualPublishPipelineProgress) => void,
@@ -1122,7 +1175,7 @@ function App() {
     if (bridge.currentBundle() !== saved) throw new XriftMcpEditorToolError("STALE_REVISION", "確認中に作品が編集されました。保存してから再試行してください");
     const review = analyzePublishReview({ bundle, scriptSources });
     const publication = bundle.project.lastPublication;
-    const readiness = buildPublishReadiness({
+    const readinessInput = {
       kind,
       metadata: inspectVisualPublishMetadata(bundle),
       thumbnail,
@@ -1133,10 +1186,13 @@ function App() {
         kind === "world"
           ? publication?.worldId ?? publication?.contentId
           : publication?.itemId ?? publication?.contentId,
-    });
+    };
+    const readiness = buildPublishReadiness(readinessInput);
     return {
       bundle,
       path,
+      scriptSources,
+      readinessInput,
       readiness,
       review,
       result: {
@@ -1147,6 +1203,59 @@ function App() {
         ...readiness,
         vramEstimate: review.vramEstimate,
         previousPublication: publication ?? null,
+      },
+    };
+  };
+
+  /**
+   * get_publish_readiness with verifyBuild: runs publishing up to the upload
+   * and folds the outcome into the readiness answer.
+   *
+   * Play only transpiles Scripts, so this is the one way for an AI client to
+   * learn before publishing that a Script will stop the publish build.
+   */
+  const verifyMcpPublishBuild = async (
+    inspected: Awaited<ReturnType<typeof inspectMcpPublishReadiness>>,
+  ) => {
+    const skipped = (summary: string) => ({
+      ...inspected.result,
+      buildCheck: { ran: false, passed: false, summary, scriptTypeErrors: [] },
+    });
+    if (inspected.readiness.blockingDiagnostics.length > 0) {
+      return skipped("公開を止める問題があるため、ビルドは確かめていません。blockingDiagnosticsを先に直してください");
+    }
+    if (!inspected.readiness.requirements.some((requirement) => requirement.id === "thumbnail" && requirement.ready)) {
+      return skipped("公開用サムネイルがないため、ビルドは確かめていません。set_project_thumbnailで撮影してから再試行してください");
+    }
+    const progress: string[] = [];
+    const check = await runVisualBuildCheck(
+      inspected.bundle,
+      inspected.path,
+      inspected.scriptSources,
+      (step) => {
+        const line = step.detail ? `${step.label}: ${step.detail}` : step.label;
+        if (progress[progress.length - 1] !== line) progress.push(line);
+      },
+      new AbortController().signal,
+    );
+    const readiness = buildPublishReadiness({
+      ...inspected.readinessInput,
+      build: {
+        passed: check.passed,
+        summary: check.summary,
+        scriptTypeErrorCount: check.scriptTypeErrors.length,
+      },
+    });
+    return {
+      ...inspected.result,
+      ...readiness,
+      buildCheck: {
+        ran: true,
+        passed: check.passed,
+        summary: check.summary,
+        scriptTypeErrors: check.scriptTypeErrors,
+        ...(check.passed ? {} : { output: clipCommandOutput(check.detail, 6000) }),
+        progress,
       },
     };
   };
@@ -1677,8 +1786,11 @@ function App() {
         await leaveMcpProjectSession();
         return { ...closing, closed: true, nextActions: ["list_projects"] };
       }
-      case "get_publish_readiness":
-        return (await inspectMcpPublishReadiness(request.tool, args)).result;
+      case "get_publish_readiness": {
+        const inspected = await inspectMcpPublishReadiness(request.tool, args);
+        if (args.verifyBuild !== true) return inspected.result;
+        return await verifyMcpPublishBuild(inspected);
+      }
       case "publish_project": {
         if (mcpPublishActiveRef.current || chatgptGenerationRef.current || mcpModelingActiveRef.current) {
           throw new XriftMcpEditorToolError(

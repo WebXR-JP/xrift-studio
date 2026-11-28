@@ -71,6 +71,11 @@ import {
 } from "../src/lib/visual-editor/serialization.ts";
 import { XriftThreeLoader } from "../packages/xrift-studio-runtime/src/three/index.ts";
 import { compileVisualProject } from "../src/lib/visual-editor/compiler/index.ts";
+import {
+  attributeBuildTypeErrors,
+  formatScriptTypeErrorSummary,
+  parseTypeScriptBuildDiagnostics,
+} from "../src/lib/visual-editor/script-type-errors.ts";
 import { createStagedTypecheckWorldDocuments } from "../src/lib/visual-editor/compiler/staged-world.fixture.ts";
 import {
   generateClassicEntrySource,
@@ -527,6 +532,7 @@ try {
     ["project model material preview", runProjectModelMaterialPreviewFixtureAssertions],
     ["project model pose controller", runProjectModelPoseControllerFixtureAssertions],
     ["staged world typecheck", runStagedWorldTypecheck],
+    ["script type errors name the Script", runScriptTypeErrorAttribution],
   ]);
   process.stdout.write("convert/runtime fixture passed\n");
 } finally {
@@ -892,7 +898,91 @@ async function runStagedWorldTypecheck() {
   );
 }
 
+/**
+ * A Script that runs in Play can still stop the publish build: Play only
+ * transpiles it, and the template's `tsc` typechecks it under `strict`. The
+ * build reports the error against the staged copy (`src/scripts/<Name>.ts`),
+ * so publishing ties it back to the Script Asset. This runs the real `tsc`
+ * with the template's settings over a world whose Script has one strict-only
+ * error and checks that the error comes back naming that Script, at the line
+ * and column the author wrote it.
+ */
+async function runScriptTypeErrorAttribution() {
+  const documents = createStagedTypecheckWorldDocuments();
+  const entries = Object.entries(documents.scriptSources ?? {});
+  assert(entries.length === 1, "the staged world must carry exactly one Script");
+  const [scriptAssetId, source] = entries[0];
+  const brokenStatement = 'export const stagedTypeError: number = "not a number";';
+  const brokenSource = `${source.replace(/\n*$/, "\n")}${brokenStatement}\n`;
+  const expectedLine = brokenSource.split("\n").indexOf(brokenStatement) + 1;
+  const expectedColumn = brokenStatement.indexOf("stagedTypeError") + 1;
+  const compiled = compileVisualProject(
+    {
+      ...documents,
+      scriptSources: { ...documents.scriptSources, [scriptAssetId]: brokenSource },
+    },
+    { generatedAt: "2026-01-01T00:00:00.000Z" },
+  );
+  assert(compiled.canStage, "a type error must not stop staging: only the build sees it");
+  const emitted = compiled.scriptModules.find((entry) => entry.assetId === scriptAssetId);
+  assert(
+    emitted?.relativePath.startsWith("src/scripts/"),
+    `the compile result must say where the Script was emitted: ${JSON.stringify(compiled.scriptModules)}`,
+  );
+  const emittedFile = compiled.overlayFiles.find((file) => file.relativePath === emitted.relativePath);
+  assert(
+    emittedFile?.content.split("\n").length === brokenSource.split("\n").length,
+    "emitting a Script must keep every line where the author wrote it",
+  );
+  const result = await runTemplateTypecheck(
+    "script-type-error",
+    compiled.overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
+  assert(result.code !== 0, "the strict build must reject the Script's type error");
+  const { scriptErrors, otherErrors } = attributeBuildTypeErrors(
+    parseTypeScriptBuildDiagnostics(result.output),
+    compiled.scriptModules,
+    documents.assets,
+  );
+  assert(
+    otherErrors.length === 0,
+    `only the Script may fail; Studio-generated files did too:\n${result.output.slice(0, 2000)}`,
+  );
+  assert(
+    scriptErrors.length === 1,
+    `expected one Script type error, got ${scriptErrors.length}:\n${result.output.slice(0, 2000)}`,
+  );
+  const [error] = scriptErrors;
+  const asset = documents.assets.assets[scriptAssetId];
+  assert(
+    error.assetId === scriptAssetId &&
+      error.scriptName === asset.name &&
+      error.sourcePath === asset.source.relativePath &&
+      error.line === expectedLine &&
+      error.column === expectedColumn &&
+      error.code === "TS2322",
+    `the error must point at the author's Script and line: ${JSON.stringify(error)}`,
+  );
+  const summary = formatScriptTypeErrorSummary(scriptErrors);
+  assert(
+    summary.includes(`「${asset.name}」（${asset.source.relativePath}）${expectedLine}行${expectedColumn}列`) &&
+      summary.includes("TS2322") &&
+      summary.includes("Play") &&
+      !summary.includes(emitted.relativePath),
+    `the summary must name the Script, not the staged copy: ${summary}`,
+  );
+}
+
 async function typecheckWithTemplateOptions(label, files, indexSource) {
+  const result = await runTemplateTypecheck(label, files, indexSource);
+  assert(
+    result.code === 0,
+    `${label}: sources do not typecheck under the publish template's tsconfig (${result.stagedRoot}):\n${result.output.slice(0, 4000)}`,
+  );
+}
+
+async function runTemplateTypecheck(label, files, indexSource) {
   // Inside node_modules on purpose: the staged sources import three, react and
   // @xrift/world-components, and tsc resolves them by walking up to this
   // repository's node_modules — the same versions the compiler was built
@@ -963,10 +1053,7 @@ async function typecheckWithTemplateOptions(label, files, indexSource) {
     child.on("error", (error) => resolve({ code: -1, output: String(error) }));
     child.on("close", (code) => resolve({ code, output }));
   });
-  assert(
-    result.code === 0,
-    `${label}: sources do not typecheck under the publish template's tsconfig (${stagedRoot}):\n${result.output.slice(0, 4000)}`,
-  );
+  return { ...result, stagedRoot };
 }
 
 async function verifyPreparedOfficialStarter() {

@@ -7,8 +7,19 @@ import {
   redactPublishFailure,
   parseXriftUploadResult,
   sanitizePublishFailure,
+  ScriptTypeCheckError,
   type XriftUploadResult,
 } from "./publish";
+import {
+  ASSET_MANIFEST_SCHEMA_VERSION,
+  SCRIPT_ASSET_CONTRACT_VERSION,
+  type AssetManifest,
+} from "./asset-manifest";
+import {
+  attributeBuildTypeErrors,
+  formatScriptTypeErrorSummary,
+  parseTypeScriptBuildDiagnostics,
+} from "./script-type-errors";
 import { VisualPublishCancellationController } from "./publish-cancellation";
 import { XRIFT_STUDIO_RUNTIME_PACKAGE } from "./compiler/compile";
 import { TEXT_PANEL_RUNTIME_PACKAGE } from "./compiler/script-emit";
@@ -24,6 +35,7 @@ import {
  */
 export function runVisualPublishFixtureAssertions(): void {
   runCancellationAssertions();
+  runScriptTypeErrorAssertions();
   assertStagingCanInstallEveryRequestablePackage();
   assertResult(
     parseXriftUploadResult(
@@ -221,6 +233,20 @@ export function runVisualPublishFixtureAssertions(): void {
     buildFailure.detail.includes("error TS2304"),
     "Build failure detail lost the compiler diagnostic",
   );
+  // The pipeline names the step 「ワールドの検査」/「アイテムの検査」. The
+  // recovery text used to match only the English label it had before the
+  // Japanese copy pass, so a real build failure never pointed at the
+  // recovered output.
+  for (const operation of ["ワールドの検査", "アイテムの検査"]) {
+    const labelled = formatPublishCommandFailure(operation, {
+      stderr: "❌ Command failed: npm run build",
+      stdout: `${BUILD_OUTPUT_SEPARATOR}\nsrc/World.tsx(12,3): error TS2304: Cannot find name 'Bloom'.`,
+    });
+    assert(
+      labelled.summary.includes(BUILD_OUTPUT_SEPARATOR),
+      `${operation}: build failure summary lost its recovery text: ${labelled.summary}`,
+    );
+  }
   // Without the marker there is nothing to recover, so the author must not be
   // told to read a section that was never appended.
   const plainCheckFailure = formatPublishCommandFailure("Worldの検査", {
@@ -272,6 +298,123 @@ export function runVisualPublishFixtureAssertions(): void {
   assert(
     unmarkedFailure.summary.includes("下のCLI出力"),
     "Unmarked output should point at the full log instead of guessing a reason",
+  );
+}
+
+/**
+ * Build type errors have to come back naming the author's Script.
+ *
+ * Play only transpiles Scripts, so the publish build is the first thing to
+ * typecheck them, and it reports against the staged copy whose file name the
+ * author never sees. These pin the parser to both tsc output formats and the
+ * attribution to the emitted path; `pnpm cli:test` runs the real tsc too.
+ */
+function runScriptTypeErrorAssertions(): void {
+  const output = [
+    "> tsc && vite build",
+    "",
+    "src/scripts/Script.tsx(527,40): error TS2352: Conversion of type 'OffscreenCanvasRenderingContext2D | null' to type 'CanvasRenderingContext2D' may be a mistake.",
+    "  Type 'OffscreenCanvasRenderingContext2D' is missing the following properties from type 'CanvasRenderingContext2D': getContextAttributes, drawFocusIfNeeded",
+    "src\\xrift-studio\\script-host.tsx(3,1): error TS6133: 'unused' is declared but its value is never read.",
+    "\u001b[96msrc/scripts/Other.ts\u001b[0m:\u001b[93m4\u001b[0m:\u001b[93m7\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS2322: \u001b[0mType 'string' is not assignable to type 'number'.",
+    "",
+    "4 const width: number = 'wide';",
+    "        ~~~~~",
+    "",
+    "Found 3 errors in 3 files.",
+  ].join("\n");
+  const diagnostics = parseTypeScriptBuildDiagnostics(output);
+  assert(diagnostics.length === 3, `expected 3 diagnostics, got ${JSON.stringify(diagnostics)}`);
+  assert(
+    diagnostics[0].file === "src/scripts/Script.tsx" &&
+      diagnostics[0].line === 527 &&
+      diagnostics[0].column === 40 &&
+      diagnostics[0].code === "TS2352" &&
+      diagnostics[0].message.includes("drawFocusIfNeeded"),
+    `plain tsc output lost its location or continuation: ${JSON.stringify(diagnostics[0])}`,
+  );
+  assert(
+    diagnostics[1].file === "src/xrift-studio/script-host.tsx",
+    `Windows separators were not normalized: ${diagnostics[1].file}`,
+  );
+  assert(
+    diagnostics[2].file === "src/scripts/Other.ts" &&
+      diagnostics[2].line === 4 &&
+      diagnostics[2].column === 7 &&
+      diagnostics[2].code === "TS2322" &&
+      !diagnostics[2].message.includes("~"),
+    `pretty tsc output was misread: ${JSON.stringify(diagnostics[2])}`,
+  );
+
+  const assets: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {
+      "script-studio": {
+        id: "script-studio",
+        name: "収録スタジオの仕掛け",
+        kind: "script",
+        status: "ready",
+        contractVersion: SCRIPT_ASSET_CONTRACT_VERSION,
+        language: "tsx",
+        source: { kind: "project", relativePath: "scripts/script.tsx" },
+      },
+    },
+  };
+  const attributed = attributeBuildTypeErrors(
+    diagnostics,
+    [{ assetId: "script-studio", relativePath: "src/scripts/Script.tsx" }],
+    assets,
+  );
+  assert(
+    attributed.scriptErrors.length === 1 &&
+      attributed.scriptErrors[0].scriptName === "収録スタジオの仕掛け" &&
+      attributed.scriptErrors[0].sourcePath === "scripts/script.tsx" &&
+      attributed.scriptErrors[0].line === 527,
+    `the error was not tied to its Script: ${JSON.stringify(attributed.scriptErrors)}`,
+  );
+  // A Script file nobody emitted, and Studio's own runtime files, are not the
+  // author's to fix.
+  assert(
+    attributed.otherErrors.length === 2,
+    `files outside the emitted Scripts were attributed: ${JSON.stringify(attributed.otherErrors)}`,
+  );
+  // An absolute path still ends with the emitted path.
+  const absolute = attributeBuildTypeErrors(
+    parseTypeScriptBuildDiagnostics(
+      "/tmp/staging/xrift-studio-world/src/scripts/Script.tsx(1,1): error TS2304: Cannot find name 'x'.",
+    ),
+    [{ assetId: "script-studio", relativePath: "src/scripts/Script.tsx" }],
+    assets,
+  );
+  assert(absolute.scriptErrors.length === 1, "an absolute tsc path was not attributed");
+
+  const summary = formatScriptTypeErrorSummary(attributed.scriptErrors);
+  assert(
+    summary.includes("「収録スタジオの仕掛け」（scripts/script.tsx）527行40列 TS2352") &&
+      summary.includes("Play") &&
+      !summary.includes("src/scripts/Script.tsx"),
+    `the summary must name the Script and line, not the staged copy: ${summary}`,
+  );
+  const many = formatScriptTypeErrorSummary(
+    Array.from({ length: 7 }, (_, index) => ({ ...attributed.scriptErrors[0], line: index + 1 })),
+  );
+  assert(many.includes("7件") && many.includes("ほか2件"), `long lists must be cut: ${many}`);
+
+  // Redaction runs on every failure that leaves the pipeline; it must keep
+  // the class and the structured errors, and still remove local paths.
+  const redacted = redactPublishFailure(
+    new ScriptTypeCheckError(
+      { summary, detail: "C:\\work\\demo\\src\\scripts\\Script.tsx(527,40): error TS2352" },
+      [{ ...attributed.scriptErrors[0], message: "see C:\\work\\demo\\notes.txt" }],
+    ),
+    ["C:\\work\\demo"],
+  );
+  assert(
+    redacted instanceof ScriptTypeCheckError &&
+      redacted.scriptTypeErrors.length === 1 &&
+      !redacted.detail.includes("C:\\work") &&
+      !redacted.scriptTypeErrors[0].message.includes("C:\\work"),
+    "redaction dropped the Script type errors or kept a local path",
   );
 }
 
