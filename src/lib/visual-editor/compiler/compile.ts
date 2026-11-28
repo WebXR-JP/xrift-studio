@@ -690,6 +690,10 @@ export function compileVisualProject(
     provenanceFile,
     ...(runtimeManifestFile ? { runtimeManifestFile } : {}),
     ...(publishPermissions ? { publishPermissions } : {}),
+    scriptModules: [...scriptPlan.modules.values()].map((module) => ({
+      assetId: module.assetId,
+      relativePath: module.relativePath,
+    })),
     stagingPlan: {
       owner: "xrift-studio-compiler",
       templateKind: documents.project.projectKind,

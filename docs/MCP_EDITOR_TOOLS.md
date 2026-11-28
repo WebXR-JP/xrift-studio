@@ -179,7 +179,7 @@ MCP / API の `mode: "plan"` は Plan の検証までを行い、`status: "plann
 **公開**
 `get_publish_readiness`, `publish_project`
 
-`get_publish_readiness` はプロジェクトを保存したうえで、公開情報（スターターのタイトル・説明のままでないこと）、サムネイル、ログイン状態、コンパイラの公開を妨げる診断エラーを確認し、不足項目ごとに修正用ツールを `nextActions` で返す。`publish_project` は同じ確認を通過した場合にだけ、公開ダイアログと同じ `publishVisualProject` パイプライン（保存・変換・`xrift check --build`・アップロード）を実行し、結果をプロジェクトの `lastPublication` に保存する。利用者が明示的に公開を依頼した場合にだけ呼び出すこと。
+`get_publish_readiness` はプロジェクトを保存したうえで、公開情報（スターターのタイトル・説明のままでないこと）、サムネイル、ログイン状態、コンパイラの公開を妨げる診断エラーを確認し、不足項目ごとに修正用ツールを `nextActions` で返す。`verifyBuild: true` を渡すと、さらに `publish_project` がアップロード前に行う処理（変換・パッケージの取得・`xrift check --build` と `strict` の型検査）をそのまま実行し、`requirements` に `build` を加えて `buildCheck`（`passed`、`summary`、スクリプトの Asset ID・名前・パス・行・列を持つ `scriptTypeErrors`、ほかの段階で止まったときの `output`）を返す。数分かかることがあるが、ログインは不要で、アップロードはしない。Play はスクリプトを型検査しないため、スクリプトを変えたあと、公開できると伝える前に使う。`publish_project` は同じ確認を通過した場合にだけ、公開ダイアログと同じ `publishVisualProject` パイプライン（保存・変換・`xrift check --build`・アップロード）を実行し、結果をプロジェクトの `lastPublication` に保存する。利用者が明示的に公開を依頼した場合にだけ呼び出すこと。
 
 ## async-document (1)
 

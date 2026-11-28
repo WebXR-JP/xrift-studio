@@ -793,7 +793,13 @@ export function VisualUploadDialog({
                   ? "前回の送信結果を確認できていません"
                   : "XRiftへ送信できませんでした"}
               </h3>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              {/* A Script type failure lists one line per error; keep the
+                  breaks and read it left to right instead of centred. */}
+              <p
+                className={`mx-auto mt-2 max-w-md whitespace-pre-line text-sm leading-6 text-slate-600 ${
+                  !unresolvedUploadAttempt && error?.includes("\n") ? "text-left" : ""
+                }`}
+              >
                 {unresolvedUploadAttempt
                   ? "前回の公開結果が不明です。二重公開を防ぐため、送信を止めています。"
                   : error || "やり直すか、エディターに戻って診断を確認してください。"}

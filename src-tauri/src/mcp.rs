@@ -515,7 +515,8 @@ async fn handle_broker_connection(
     };
     let (sender, receiver) = oneshot::channel();
     let request_id = envelope.request.id.clone();
-    let request_timeout = request_timeout_seconds(&envelope.request.tool);
+    let request_timeout =
+        request_timeout_seconds_for(&envelope.request.tool, &envelope.request.arguments);
     state
         .pending
         .lock()
@@ -622,6 +623,19 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
         message: message.to_string(),
         details: None,
     }
+}
+
+/// Like `request_timeout_seconds`, for calls whose arguments turn a quick read
+/// into a whole pipeline.
+///
+/// `get_publish_readiness` normally answers in seconds, but with `verifyBuild`
+/// it runs publishing up to the upload — package install and the official
+/// build included — which takes as long as publishing does.
+fn request_timeout_seconds_for(tool_name: &str, arguments: &Value) -> u64 {
+    if tool_name == "get_publish_readiness" && arguments.get("verifyBuild") == Some(&Value::Bool(true)) {
+        return MCP_LONG_REQUEST_TIMEOUT_SECONDS;
+    }
+    request_timeout_seconds(tool_name)
 }
 
 /// The broker waits longer on tools whose work is a whole pipeline, not one edit.
@@ -1454,7 +1468,7 @@ fn mcp_authoring_instructions() -> String {
     format!("{} {}", crate::chatgpt::authoring_core_instructions(), MCP_AUTHORING_INSTRUCTIONS)
 }
 
-const MCP_AUTHORING_INSTRUCTIONS: &str = "XRift Studio edits one Scene of a world people visit together. Start with list_projects; create_project or open_project opens an Editor when needed. Read get_editor_context for current scope, revision and host-verified starterEntityIds. Never infer disposable content by a name or ID alone. For a new place those exact untouched starter Entities may be replaced; preserve authored content outside the requested scope. target=current selects the project to work in, not a requirement to reuse initial shapes. Before substantial production, resume get_world_authoring or save a short blueprint and criteria with begin_world_authoring. Keep the existing run budget unchanged and never replace it just to reset limits. get_world_authoring returns writeAdmission, terminalReason, reasons and nextActions. After a limit stop writing; reading and captures remain available. cancel_world_authoring stops later writes and preserves saved work. For static source composition, read get_world_authoring_guide(topic:r3f) and use apply_r3f_scene; update its returned root after reading get_entity_components.r3fAuthoring. For existing/catalog resources read topic:assets; for necessary complex bespoke geometry read topic:blender. When existing work must get better, read topic:refinement: reproduce the defect, fix its cause, and compare the saved result with the baseline under the same camera or the same operations. For a focal Model or an existing Model's look also read topic:model-quality. Load only the needed route, not every guide. Runtime behavior uses get_scripting_capabilities and list_script_templates; Play executes saved Scripts without sandboxing or a separate approval dialog. Read list_component_definitions for exact official fields and worldComponents placement/runtime guidance when adding functional equipment. Always send current projectId, sceneId and expectedRevision with document writes. On EDITOR_BUSY or STALE_REVISION, fetch current context and replan only unfinished changes. Save and capture_scene_view from spawn at eye height and iso; judge the actual images, record each criterion with review_world_authoring, then complete_world_authoring checks saved current evidence. A Component or Edit placeholder does not prove live or multiplayer behavior; report untested behavior. Studio ChatGPT generation uses connect_chatgpt, list_chatgpt_models and generate_chatgpt_world; follow their tool descriptions for authorization, supported reasoning and polling. Ask only for a consequential missing decision, authentication, or an unrequested destructive/external action. Publish only when explicitly requested, using get_publish_readiness then publish_project. Otherwise finish after saving and verification. No source checkout, runner or local skill is required.";
+const MCP_AUTHORING_INSTRUCTIONS: &str = "XRift Studio edits one Scene of a world people visit together. Start with list_projects; create_project or open_project opens an Editor when needed. Read get_editor_context for current scope, revision and host-verified starterEntityIds. Never infer disposable content by a name or ID alone. For a new place those exact untouched starter Entities may be replaced; preserve authored content outside the requested scope. target=current selects the project to work in, not a requirement to reuse initial shapes. Before substantial production, resume get_world_authoring or save a short blueprint and criteria with begin_world_authoring. Keep the existing run budget unchanged and never replace it just to reset limits. get_world_authoring returns writeAdmission, terminalReason, reasons and nextActions. After a limit stop writing; reading and captures remain available. cancel_world_authoring stops later writes and preserves saved work. For static source composition, read get_world_authoring_guide(topic:r3f) and use apply_r3f_scene; update its returned root after reading get_entity_components.r3fAuthoring. For existing/catalog resources read topic:assets; for necessary complex bespoke geometry read topic:blender. When existing work must get better, read topic:refinement: reproduce the defect, fix its cause, and compare the saved result with the baseline under the same camera or the same operations. For a focal Model or an existing Model's look also read topic:model-quality. Load only the needed route, not every guide. Runtime behavior uses get_scripting_capabilities and list_script_templates; Play executes saved Scripts without sandboxing or a separate approval dialog. Read list_component_definitions for exact official fields and worldComponents placement/runtime guidance when adding functional equipment. Always send current projectId, sceneId and expectedRevision with document writes. On EDITOR_BUSY or STALE_REVISION, fetch current context and replan only unfinished changes. Save and capture_scene_view from spawn at eye height and iso; judge the actual images, record each criterion with review_world_authoring, then complete_world_authoring checks saved current evidence. A Component or Edit placeholder does not prove live or multiplayer behavior; report untested behavior. Studio ChatGPT generation uses connect_chatgpt, list_chatgpt_models and generate_chatgpt_world; follow their tool descriptions for authorization, supported reasoning and polling. Ask only for a consequential missing decision, authentication, or an unrequested destructive/external action. Play only transpiles Scripts but publishing typechecks them strictly: after Script changes run get_publish_readiness with verifyBuild:true and fix its scriptTypeErrors. Publish only when explicitly requested, using get_publish_readiness then publish_project. Otherwise finish after saving and verification. No source checkout, runner or local skill is required.";
 
 
 pub fn run_stdio_server() -> Result<(), String> {
@@ -1688,7 +1702,7 @@ fn proxy_tool_call(
     .map_err(|_| "XRift Studio is not running".to_string())?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(
-            request_timeout_seconds(&request.tool)
+            request_timeout_seconds_for(&request.tool, &request.arguments)
                 + (MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS / 1_000)
                 + 5,
         )))
@@ -2290,10 +2304,11 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_publish_readiness",
-            "description": "Save the open project and report what still blocks publishing: requirements (metadata not left as the starter's, a project thumbnail, a signed-in account, no blocking compiler diagnostics), the update target when the project was published before, blocking and warning diagnostics with entityId/assetId, and nextActions naming the tool that clears each unmet requirement. Call it before publish_project and after fixing anything it named. Changes no scene content.",
+            "description": "Save the open project and report what still blocks publishing: requirements (metadata not left as the starter's, a project thumbnail, a signed-in account, no blocking compiler diagnostics), the update target when the project was published before, blocking and warning diagnostics with entityId/assetId, and nextActions naming the tool that clears each unmet requirement. Call it before publish_project and after fixing anything it named. With verifyBuild: true it also runs everything publish_project runs before the upload (convert, install packages, the official check and its strict TypeScript build) and adds a build requirement plus buildCheck: passed, summary, scriptTypeErrors (assetId, scriptName, sourcePath, line, column, code, message) and output when another step failed. That takes minutes, needs no sign-in and never uploads. Play only transpiles Scripts, so a Script that runs in Play can still stop publishing: use verifyBuild after Script changes before reporting a world as ready to publish. Changes no scene content.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
-                "sceneId": { "type": "string", "minLength": 1 }
+                "sceneId": { "type": "string", "minLength": 1 },
+                "verifyBuild": { "type": "boolean", "description": "Default false. true also builds the project the way publish_project does, without uploading." }
             }, "required": ["projectId", "sceneId"], "additionalProperties": false }
         },
         {
@@ -3110,7 +3125,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "create_script_asset",
-            "description": "Create a TypeScript or TSX Script Asset in the open visual project and select it in Assets. Set templateId to an ID from list_script_templates, or set source for custom code; do not send both. Built-in templates choose their declared language automatically. For custom JSX source set language to tsx. Omitting both keeps the runnable default template. The currently open Script Editor buffer is preserved.",
+            "description": "Create a TypeScript or TSX Script Asset in the open visual project and select it in Assets. Set templateId to an ID from list_script_templates, or set source for custom code; do not send both. Built-in templates choose their declared language automatically. For custom JSX source set language to tsx. Omitting both keeps the runnable default template. The currently open Script Editor buffer is preserved. Play does not typecheck Scripts; get_publish_readiness with verifyBuild: true runs the strict check publishing uses.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3147,7 +3162,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "update_script_asset",
-            "description": "Replace a Script Asset's TypeScript source. This remains available during Play, awaits recompilation, and returns sourceSaved, runtimeUpdated, and compileErrors. A failed live compile keeps the previous running module. Declare every Asset or Entity used by the source through update_script_component.",
+            "description": "Replace a Script Asset's TypeScript source. This remains available during Play, awaits recompilation, and returns sourceSaved, runtimeUpdated, and compileErrors. compileErrors come from Play's transpile and never include TypeScript type errors; publishing typechecks Scripts strictly, so check with get_publish_readiness verifyBuild: true. A failed live compile keeps the previous running module. Declare every Asset or Entity used by the source through update_script_component.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4924,6 +4939,26 @@ mod tests {
     }
 
     #[test]
+    fn publish_readiness_can_build_like_publishing_without_uploading() {
+        let tools = tool_definitions();
+        let find = |name: &str| tools.as_array().unwrap().iter().find(|tool| tool["name"] == name).unwrap();
+        let readiness = find("get_publish_readiness");
+        assert_eq!(readiness["inputSchema"]["properties"]["verifyBuild"]["type"], "boolean");
+        assert_eq!(readiness["inputSchema"]["required"], json!(["projectId", "sceneId"]));
+        let description = readiness["description"].as_str().unwrap();
+        for expected in ["verifyBuild", "scriptTypeErrors", "never uploads", "Play only transpiles Scripts"] {
+            assert!(description.contains(expected), "get_publish_readiness must explain {expected}");
+        }
+        // The Script tools are where an AI client learns Play's compileErrors
+        // are not the publish check; without the pointer it reports a world
+        // ready that the publish build then rejects.
+        for name in ["create_script_asset", "update_script_asset"] {
+            assert!(find(name)["description"].as_str().unwrap().contains("verifyBuild"), "{name} must point at verifyBuild");
+        }
+        assert!(mcp_authoring_instructions().contains("verifyBuild:true"));
+    }
+
+    #[test]
     fn source_authoring_tools_expose_complete_source_revision_and_progressive_guides() {
         let tools = tool_definitions();
         let find = |name: &str| tools.as_array().unwrap().iter().find(|tool| tool["name"] == name).unwrap();
@@ -5412,6 +5447,26 @@ mod tests {
     }
 
     #[test]
+    fn readiness_waits_like_publishing_only_when_it_builds() {
+        assert_eq!(
+            request_timeout_seconds_for("get_publish_readiness", &json!({"projectId": "p", "sceneId": "s"})),
+            MCP_REQUEST_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            request_timeout_seconds_for("get_publish_readiness", &json!({"verifyBuild": false})),
+            MCP_REQUEST_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            request_timeout_seconds_for("get_publish_readiness", &json!({"verifyBuild": true})),
+            request_timeout_seconds("publish_project")
+        );
+        assert_eq!(
+            request_timeout_seconds_for("get_editor_context", &json!({"verifyBuild": true})),
+            MCP_REQUEST_TIMEOUT_SECONDS
+        );
+    }
+
+    #[test]
     fn blender_creation_waits_for_native_build_and_asset_import() {
         assert_eq!(
             request_timeout_seconds("create_blender_model"),
@@ -5789,6 +5844,7 @@ pub(crate) async fn call_pi_tool(app: &AppHandle, generation_id: &str, tool: &st
     let _guard = if read_only { None } else { Some(state.request_lock.lock().await) };
     if cancelled.load(Ordering::Acquire) { return Err("制作を停止しました".into()); }
     let id = format!("pi-{}-{}", generation_id, MCP_MONOTONIC_START.get_or_init(Instant::now).elapsed().as_nanos());
+    let arguments_for_timeout = json!({ "verifyBuild": arguments.get("verifyBuild").cloned().unwrap_or(Value::Null) });
     let (sender, receiver) = oneshot::channel();
     state.pending.lock().await.insert(id.clone(), sender);
     let event = XriftMcpEditorRequestEvent { id: id.clone(), client_name: "Pi".into(), tool: tool.into(), arguments, internal_generation_id: Some(generation_id.into()), internal_scope: Some(scope) };
@@ -5796,7 +5852,7 @@ pub(crate) async fn call_pi_tool(app: &AppHandle, generation_id: &str, tool: &st
         .and_then(|window| window.emit(MCP_EVENT_NAME, event).map_err(|_| "エディターへ操作を送れませんでした".to_string()));
     if let Err(error) = emitted { state.pending.lock().await.remove(&id); return Err(error); }
     // Do not abandon an admitted write on cancellation: drain its response first.
-    let response = tokio::time::timeout(Duration::from_secs(request_timeout_seconds(tool)), receiver).await;
+    let response = tokio::time::timeout(Duration::from_secs(request_timeout_seconds_for(tool, &arguments_for_timeout)), receiver).await;
     state.pending.lock().await.remove(&id);
     response.map_err(|_| "エディターの処理完了を確認できませんでした。シーンの保存状態を確認してください".to_string())?
         .map_err(|_| "エディターとの接続が終了しました".to_string())

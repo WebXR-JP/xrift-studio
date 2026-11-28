@@ -24,6 +24,12 @@ import type {
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { loadCompilerBundledAssetFiles } from "./compiler-bundled-assets";
+import {
+  attributeBuildTypeErrors,
+  formatScriptTypeErrorSummary,
+  parseTypeScriptBuildDiagnostics,
+  type ScriptTypeError,
+} from "./script-type-errors";
 
 export type VisualPublishPipelineStage =
   | "saving"
@@ -125,6 +131,23 @@ export type PublishCommandFailure = {
   /** Full sanitized CLI output, for verbatim display. */
   detail: string;
 };
+
+/**
+ * A check that failed because an author's Script does not typecheck.
+ *
+ * Carries the errors already tied to the Script Asset, line and column, so the
+ * dialog and AI clients can say which Script to open instead of pointing at
+ * the staged copy the build reported.
+ */
+export class ScriptTypeCheckError extends PublishCommandError {
+  readonly scriptTypeErrors: ScriptTypeError[];
+
+  constructor(failure: PublishCommandFailure, scriptTypeErrors: ScriptTypeError[]) {
+    super(failure);
+    this.name = "ScriptTypeCheckError";
+    this.scriptTypeErrors = scriptTypeErrors;
+  }
+}
 
 function assertSucceeded(
   result: RunResult,
@@ -260,7 +283,7 @@ function publishCommandRecovery(operation: string, detail?: string): string {
     return "テンプレートを取得できませんでした。ネットワーク接続、GitHubへのアクセス、プロキシ設定を確認してから再試行してください。\n";
   }
   if (
-    /^(World|Item)の検査$/.test(operation) &&
+    /^(?:World|Item|ワールド|アイテム)の検査$/.test(operation) &&
     BUILD_FAILURE_MARKER.test(detail ?? "")
   ) {
     return `公開用データをビルドできませんでした。下の「${BUILD_OUTPUT_SEPARATOR}」以降にコンパイラの出力があります。該当するシーン・素材・スクリプトを修正してから再試行してください。
@@ -284,6 +307,18 @@ export function redactPublishFailure(
   error: unknown,
   privatePaths: string[],
 ): Error {
+  if (error instanceof ScriptTypeCheckError) {
+    return new ScriptTypeCheckError(
+      {
+        summary: sanitizePublishFailure(error.message, privatePaths),
+        detail: sanitizePublishFailure(error.detail, privatePaths),
+      },
+      error.scriptTypeErrors.map((entry) => ({
+        ...entry,
+        message: sanitizePublishFailure(entry.message, privatePaths),
+      })),
+    );
+  }
   if (error instanceof PublishCommandError) {
     return new PublishCommandError({
       summary: sanitizePublishFailure(error.message, privatePaths),
@@ -498,99 +533,212 @@ export async function materializeVisualCompilation(
   return staged.projectPath;
 }
 
-export async function publishVisualProject({
-  authoringProjectPath,
-  token,
-  kind,
-  documents,
-  save,
-  report,
-  onLog,
-  signal,
-}: PublishVisualProjectRequest): Promise<XriftUploadResult> {
-  const privatePaths = [authoringProjectPath?.trim() ?? ""].filter(Boolean);
+type StagedVisualProject = {
+  resolvedAuthoringPath: string;
+  compilation: VisualCompileResult;
+  stagingPath: string;
+};
+
+/**
+ * Everything publishing does before the upload: save, compile, stage, install,
+ * run the official check (which builds the world) and confirm the module entry.
+ *
+ * Shared by publishing and by the build check, so "the check passed" means the
+ * same thing in both. Private paths discovered on the way are appended to
+ * `privatePaths` for the caller's redaction.
+ */
+async function stageAndCheckVisualProject(
+  {
+    authoringProjectPath,
+    kind,
+    documents,
+    save,
+    report,
+    signal,
+  }: Omit<PublishVisualProjectRequest, "token" | "onLog">,
+  privatePaths: string[],
+  safeLog: (line: LogLine) => void,
+): Promise<StagedVisualProject> {
+  throwIfAborted(signal);
+  report({
+    stage: "saving",
+    label: "制作データを保存しています",
+    percent: 8,
+    cancelSafe: true,
+  });
+  const savedProjectPath = await save();
+  const resolvedAuthoringPath =
+    typeof savedProjectPath === "string" && savedProjectPath.trim()
+      ? savedProjectPath
+      : authoringProjectPath?.trim();
+  if (!resolvedAuthoringPath) {
+    throw new Error("アップロード前にビジュアルプロジェクトを保存できませんでした。");
+  }
+  privatePaths.push(resolvedAuthoringPath);
+
+  throwIfAborted(signal);
+  report({
+    stage: "compiling",
+    label: "シーンと素材を検証しています",
+    percent: 18,
+    cancelSafe: true,
+  });
+  const compilation = compileVisualProject(documents);
+  const stagingPath = await materializeVisualCompilation(
+    resolvedAuthoringPath,
+    compilation,
+    safeLog,
+    signal,
+    report,
+  );
+  privatePaths.push(stagingPath);
+
+  throwIfAborted(signal);
+  report({
+    stage: "checking",
+    label: "XRiftの検査を実行しています",
+    detail: `公式CLIで${kind === "world" ? "ワールド" : "アイテム"}をビルドし、問題がないか確認します。`,
+    percent: 66,
+    cancelSafe: false,
+  });
+  const checked =
+    kind === "world"
+      ? await xrift.checkWorld(stagingPath, safeLog)
+      : await xrift.checkItem(stagingPath, safeLog);
+  if (checked.code !== 0) {
+    throw checkFailureError(
+      kind,
+      await withRecoveredBuildOutput(
+        checked,
+        stagingPath,
+        safeLog,
+        signal,
+        report,
+      ),
+      compilation,
+      documents,
+      privatePaths,
+    );
+  }
+
+  // The Studio compiler always stages an official Module Federation template.
+  // A non-empty dist without remoteEntry.js can still pass the CLI's generic
+  // directory check, but XRift cannot load that build. Refuse before any
+  // remote upload is marked as started.
+  const stagedConfig = parseStagedXriftConfig(
+    await tauri.readTextFile(stagingPath, "xrift.json"),
+    kind,
+  );
+  await assertStagedModuleEntry(
+    stagingPath,
+    stagedConfig.distDir,
+    stagedConfig.ignore,
+    signal,
+  );
+  return { resolvedAuthoringPath, compilation, stagingPath };
+}
+
+/**
+ * Turns a failed official check into the error the author sees.
+ *
+ * When the build's TypeScript errors sit in an author's Script, the error names
+ * that Script and line instead of the staged copy, because Play never
+ * typechecks a Script and the author has no other way to find out which one
+ * stopped the publish.
+ */
+function checkFailureError(
+  kind: ProjectKind,
+  output: Pick<RunResult, "stdout" | "stderr">,
+  compilation: VisualCompileResult,
+  documents: VisualCompilerDocuments,
+  privatePaths: string[],
+): PublishCommandError {
+  const failure = formatPublishCommandFailure(
+    `${kind === "world" ? "ワールド" : "アイテム"}の検査`,
+    output,
+    privatePaths,
+  );
+  const { scriptErrors } = attributeBuildTypeErrors(
+    parseTypeScriptBuildDiagnostics(`${output.stderr}\n${output.stdout}`),
+    compilation.scriptModules,
+    documents.assets,
+  );
+  if (scriptErrors.length === 0) return new PublishCommandError(failure);
+  const safeErrors = scriptErrors.map((entry) => ({
+    ...entry,
+    message: sanitizePublishFailure(entry.message, privatePaths),
+  }));
+  return new ScriptTypeCheckError(
+    { summary: formatScriptTypeErrorSummary(safeErrors), detail: failure.detail },
+    safeErrors,
+  );
+}
+
+export type VisualBuildCheckResult = {
+  passed: boolean;
+  /** One paragraph for the author: what passed, or what stopped and why. */
+  summary: string;
+  /** Build type errors tied to the Script Asset, line and column. */
+  scriptTypeErrors: ScriptTypeError[];
+  /** Full sanitized output of the failed step. Empty when the check passed. */
+  detail: string;
+};
+
+/**
+ * Runs everything publishing runs before the upload, and stops there.
+ *
+ * Play transpiles Scripts without typechecking them and never runs the
+ * official check, so passing Play says nothing about whether the world will
+ * publish. This answers that question without uploading: the same staging, the
+ * same `xrift check --build`, the same TypeScript settings as publishing.
+ */
+export async function verifyVisualProjectBuild(
+  request: Omit<PublishVisualProjectRequest, "token">,
+): Promise<VisualBuildCheckResult> {
+  const privatePaths = [request.authoringProjectPath?.trim() ?? ""].filter(Boolean);
+  const safeLog = (line: LogLine) => {
+    const text = sanitizePublishFailure(line.text, privatePaths);
+    request.onLog({ ...line, text: text || "CLI出力を安全のため非表示にしました。" });
+  };
+  try {
+    await stageAndCheckVisualProject(request, privatePaths, safeLog);
+    return {
+      passed: true,
+      summary: "公開と同じ変換・検査・ビルドを通過しました。アップロードはしていません。",
+      scriptTypeErrors: [],
+      detail: "",
+    };
+  } catch (error) {
+    if (
+      error instanceof VisualCompilationError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw error;
+    }
+    const redacted = redactPublishFailure(error, privatePaths);
+    return {
+      passed: false,
+      summary: redacted.message,
+      scriptTypeErrors:
+        redacted instanceof ScriptTypeCheckError ? redacted.scriptTypeErrors : [],
+      detail: redacted instanceof PublishCommandError ? redacted.detail : "",
+    };
+  }
+}
+
+export async function publishVisualProject(
+  request: PublishVisualProjectRequest,
+): Promise<XriftUploadResult> {
+  const { token, kind, documents, report, onLog, signal } = request;
+  const privatePaths = [request.authoringProjectPath?.trim() ?? ""].filter(Boolean);
   const safeLog = (line: LogLine) => {
     const text = sanitizePublishFailure(line.text, privatePaths);
     onLog({ ...line, text: text || "CLI出力を安全のため非表示にしました。" });
   };
 
   try {
-    throwIfAborted(signal);
-    report({
-      stage: "saving",
-      label: "制作データを保存しています",
-      percent: 8,
-      cancelSafe: true,
-    });
-    const savedProjectPath = await save();
-    const resolvedAuthoringPath =
-      typeof savedProjectPath === "string" && savedProjectPath.trim()
-        ? savedProjectPath
-        : authoringProjectPath?.trim();
-    if (!resolvedAuthoringPath) {
-      throw new Error("アップロード前にビジュアルプロジェクトを保存できませんでした。");
-    }
-    privatePaths.push(resolvedAuthoringPath);
-
-    throwIfAborted(signal);
-    report({
-      stage: "compiling",
-      label: "シーンと素材を検証しています",
-      percent: 18,
-      cancelSafe: true,
-    });
-    const compilation = compileVisualProject(documents);
-    const stagingPath = await materializeVisualCompilation(
-      resolvedAuthoringPath,
-      compilation,
-      safeLog,
-      signal,
-      report,
-    );
-    privatePaths.push(stagingPath);
-
-    throwIfAborted(signal);
-    report({
-      stage: "checking",
-      label: "XRiftの検査を実行しています",
-      detail: `公式CLIで${kind === "world" ? "ワールド" : "アイテム"}をビルドし、問題がないか確認します。`,
-      percent: 66,
-      cancelSafe: false,
-    });
-    const checked =
-      kind === "world"
-        ? await xrift.checkWorld(stagingPath, safeLog)
-        : await xrift.checkItem(stagingPath, safeLog);
-    if (checked.code !== 0) {
-      throw new PublishCommandError(
-        formatPublishCommandFailure(
-          `${kind === "world" ? "ワールド" : "アイテム"}の検査`,
-          await withRecoveredBuildOutput(
-            checked,
-            stagingPath,
-            safeLog,
-            signal,
-            report,
-          ),
-          privatePaths,
-        ),
-      );
-    }
-
-    // The Studio compiler always stages an official Module Federation template.
-    // A non-empty dist without remoteEntry.js can still pass the CLI's generic
-    // directory check, but XRift cannot load that build. Refuse before any
-    // remote upload is marked as started.
-    const stagedConfig = parseStagedXriftConfig(
-      await tauri.readTextFile(stagingPath, "xrift.json"),
-      kind,
-    );
-    await assertStagedModuleEntry(
-      stagingPath,
-      stagedConfig.distDir,
-      stagedConfig.ignore,
-      signal,
-    );
+    const { resolvedAuthoringPath, compilation, stagingPath } =
+      await stageAndCheckVisualProject(request, privatePaths, safeLog);
 
     throwIfAborted(signal);
     report({

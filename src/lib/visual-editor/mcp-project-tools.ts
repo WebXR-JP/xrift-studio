@@ -276,7 +276,7 @@ export function inspectVisualPublishMetadata(
 }
 
 export type PublishRequirement = {
-  id: "metadata" | "thumbnail" | "account" | "diagnostics" | "target";
+  id: "metadata" | "thumbnail" | "account" | "diagnostics" | "build" | "target";
   ready: boolean;
   detail: string;
   /** The tool that clears this requirement, when one exists. */
@@ -291,6 +291,19 @@ export type PublishReadinessInput = {
   displayName?: string | null;
   diagnostics: readonly CompilerDiagnostic[];
   remoteId?: string | null;
+  /**
+   * Result of running the publish pipeline up to the upload, when it was run.
+   * Absent means it was not run, which is not a requirement: publishing runs
+   * the same check itself.
+   */
+  build?: PublishBuildCheckOutcome;
+};
+
+export type PublishBuildCheckOutcome = {
+  passed: boolean;
+  summary: string;
+  /** Set when an author's Script stopped the build. */
+  scriptTypeErrorCount: number;
 };
 
 export type PublishReadinessReport = {
@@ -344,6 +357,7 @@ export function buildPublishReadiness(input: PublishReadinessInput): PublishRead
           ? "公開を止める問題はありません"
           : `公開を止める問題が${blocking.length}件あります。blockingDiagnosticsのentityIdとassetIdを直してください`,
     },
+    ...(input.build ? [buildRequirement(input.build)] : []),
     {
       id: "target",
       ready: true,
@@ -362,6 +376,29 @@ export function buildPublishReadiness(input: PublishReadinessInput): PublishRead
     blockingDiagnostics: blocking,
     warningDiagnostics: warnings,
     nextActions: ready ? ["publish_project"] : nextActions,
+  };
+}
+
+function buildRequirement(build: PublishBuildCheckOutcome): PublishRequirement {
+  if (build.passed) {
+    return {
+      id: "build",
+      ready: true,
+      detail: "公開と同じ変換・検査・ビルドを通過しました",
+    };
+  }
+  if (build.scriptTypeErrorCount > 0) {
+    return {
+      id: "build",
+      ready: false,
+      detail: `スクリプトに型エラーが${build.scriptTypeErrorCount}件あり、公開時のビルドで止まります。buildCheck.scriptTypeErrorsのassetId・line・columnを見てupdate_script_assetで直してください。Playは型を確かめないため、Playで動いていても止まります`,
+      nextAction: "update_script_asset",
+    };
+  }
+  return {
+    id: "build",
+    ready: false,
+    detail: `公開と同じ検査で止まりました: ${build.summary.split("\n")[0]}。buildCheck.outputで原因を確認してください`,
   };
 }
 
